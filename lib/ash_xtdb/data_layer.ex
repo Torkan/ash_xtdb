@@ -128,13 +128,26 @@ defmodule AshXTDB.DataLayer do
         type: :string,
         required: true,
         doc: "The XTDB table name"
+      ],
+      valid_from_public?: [
+        type: :boolean,
+        default: false,
+        doc: "Whether the `_valid_from` attribute should be public"
+      ],
+      valid_to_public?: [
+        type: :boolean,
+        default: false,
+        doc: "Whether the `_valid_to` attribute should be public"
       ]
     ]
   }
 
   use Spark.Dsl.Extension,
     sections: [@xtdb],
-    transformers: [AshXTDB.DataLayer.Transformers.SetDefaults]
+    transformers: [
+      AshXTDB.DataLayer.Transformers.SetDefaults,
+      AshXTDB.DataLayer.Transformers.AddTemporalAttributes
+    ]
 
   require Logger
   require Ash.Query
@@ -222,6 +235,11 @@ defmodule AshXTDB.DataLayer do
   defp do_can?(_, {:query_aggregate, :bool_and}), do: true
   defp do_can?(_, {:query_aggregate, :bool_or}), do: true
 
+  # Aggregate relationships - allow aggregating over relationships to other XTDB resources
+  defp do_can?(_, {:aggregate_relationship, relationship}) do
+    Ash.Resource.Info.data_layer(relationship.destination) == __MODULE__
+  end
+
   # Phase 5: Transactions
   defp do_can?(_, :transact), do: true
 
@@ -229,6 +247,12 @@ defmodule AshXTDB.DataLayer do
   defp do_can?(_, :bulk_create), do: true
   defp do_can?(_, :update_query), do: true
   defp do_can?(_, :destroy_query), do: true
+
+  # Phase 8: Atomic Updates
+  # Supports expressions in UPDATE SET clause (e.g., counter = counter + 1)
+  defp do_can?(_, :expr_error), do: true
+  defp do_can?(_, {:atomic, :update}), do: true
+  defp do_can?(_, {:atomic, :upsert}), do: true
 
   # Phase 9: Calculations
   defp do_can?(_, :expression_calculation), do: true
@@ -293,23 +317,33 @@ defmodule AshXTDB.DataLayer do
 
     case repo.query(sql, params, opts) do
       {:ok, %Postgrex.Result{rows: rows, columns: columns}} ->
-        records = rows_to_records(rows, columns, resource)
-        add_calculations_to_records(records, resource, query)
+        records_with_sql_calcs = rows_to_records(rows, columns, resource)
+        add_calculations_to_records(records_with_sql_calcs, resource, query)
 
       {:error, error} ->
         {:error, to_ash_error(error)}
     end
   end
 
-  defp add_calculations_to_records(records, _resource, %{calculations: []}),
-    do: {:ok, records}
+  defp add_calculations_to_records(records_with_sql_calcs, _resource, %{calculations: []}) do
+    # No calculations requested - just extract the records
+    records = Enum.map(records_with_sql_calcs, fn {record, _sql_calcs} -> record end)
+    {:ok, records}
+  end
 
-  defp add_calculations_to_records(records, resource, %{
+  defp add_calculations_to_records(records_with_sql_calcs, resource, %{
          calculations: calculations,
          domain: domain
        }) do
-    Enum.reduce_while(records, {:ok, []}, fn record, {:ok, acc} ->
-      case evaluate_calculations_for_record(record, calculations, resource, domain) do
+    Enum.reduce_while(records_with_sql_calcs, {:ok, []}, fn {record, sql_calculations},
+                                                            {:ok, acc} ->
+      case evaluate_calculations_for_record(
+             record,
+             calculations,
+             sql_calculations,
+             resource,
+             domain
+           ) do
         {:ok, updated_record} -> {:cont, {:ok, [updated_record | acc]}}
         {:error, error} -> {:halt, {:error, error}}
       end
@@ -320,39 +354,90 @@ defmodule AshXTDB.DataLayer do
     end
   end
 
-  defp evaluate_calculations_for_record(record, calculations, resource, domain) do
+  defp evaluate_calculations_for_record(record, calculations, sql_calculations, resource, domain) do
     Enum.reduce_while(calculations, {:ok, record}, fn {calculation, expression}, {:ok, record} ->
-      case Ash.Filter.hydrate_refs(expression, %{resource: resource, public?: false}) do
-        {:ok, hydrated_expression} ->
-          # Access context using struct field access, not Access protocol
-          context = calculation.context
-          actor = if is_struct(context), do: Map.get(context, :actor), else: context[:actor]
-          tenant = if is_struct(context), do: Map.get(context, :tenant), else: context[:tenant]
+      # Get the calculation key (load name or calculation name)
+      calc_key = calculation.load || calculation.name
 
-          case Ash.Expr.eval_hydrated(hydrated_expression,
-                 record: record,
-                 resource: resource,
-                 domain: domain,
-                 actor: actor,
-                 tenant: tenant
-               ) do
-            {:ok, value} ->
-              updated_record = put_calculation_value(record, calculation, value)
-              {:cont, {:ok, updated_record}}
+      # Check if this calculation was computed in SQL
+      case Map.get(sql_calculations, calc_key) do
+        nil ->
+          # Not in SQL results - evaluate in Elixir
+          evaluate_calculation_in_elixir(record, calculation, expression, resource, domain)
 
-            :unknown ->
-              # If we can't evaluate, set to nil
-              updated_record = put_calculation_value(record, calculation, nil)
-              {:cont, {:ok, updated_record}}
-
-            {:error, error} ->
-              {:halt, {:error, error}}
-          end
-
-        {:error, error} ->
-          {:halt, {:error, error}}
+        sql_value ->
+          # Use the SQL-computed value, cast to the calculation's type
+          casted_value = cast_calculation_value(sql_value, calculation.type)
+          updated_record = put_calculation_value(record, calculation, casted_value)
+          {:cont, {:ok, updated_record}}
       end
     end)
+  end
+
+  # Cast SQL calculation result to the expected type
+  defp cast_calculation_value(nil, _type), do: nil
+
+  defp cast_calculation_value(value, type) when is_binary(value) do
+    # XTDB may return numeric results as strings
+    resolved_type = Ash.Type.get_type(type)
+
+    cond do
+      resolved_type in [Ash.Type.Integer, :integer] ->
+        case Integer.parse(value) do
+          {int, ""} -> int
+          _ -> value
+        end
+
+      resolved_type in [Ash.Type.Float, :float] ->
+        case Float.parse(value) do
+          {float, ""} -> float
+          _ -> value
+        end
+
+      resolved_type in [Ash.Type.Decimal, :decimal] ->
+        Decimal.new(value)
+
+      resolved_type in [Ash.Type.Boolean, :boolean] ->
+        value in ["true", "t", "1"]
+
+      true ->
+        value
+    end
+  end
+
+  defp cast_calculation_value(value, _type), do: value
+
+  defp evaluate_calculation_in_elixir(record, calculation, expression, resource, domain) do
+    case Ash.Filter.hydrate_refs(expression, %{resource: resource, public?: false}) do
+      {:ok, hydrated_expression} ->
+        # Access context using struct field access, not Access protocol
+        context = calculation.context
+        actor = if is_struct(context), do: Map.get(context, :actor), else: context[:actor]
+        tenant = if is_struct(context), do: Map.get(context, :tenant), else: context[:tenant]
+
+        case Ash.Expr.eval_hydrated(hydrated_expression,
+               record: record,
+               resource: resource,
+               domain: domain,
+               actor: actor,
+               tenant: tenant
+             ) do
+          {:ok, value} ->
+            updated_record = put_calculation_value(record, calculation, value)
+            {:cont, {:ok, updated_record}}
+
+          :unknown ->
+            # If we can't evaluate, set to nil
+            updated_record = put_calculation_value(record, calculation, nil)
+            {:cont, {:ok, updated_record}}
+
+          {:error, error} ->
+            {:halt, {:error, error}}
+        end
+
+      {:error, error} ->
+        {:halt, {:error, error}}
+    end
   end
 
   defp put_calculation_value(record, calculation, value) do
@@ -1036,19 +1121,23 @@ defmodule AshXTDB.DataLayer do
     # Get the primary key value(s) for WHERE clause
     pkey = primary_key_value(changeset.data, resource)
 
-    # Get changed attributes
+    # Get changed attributes and atomics
     changes = get_changes(changeset)
+    atomics = changeset.atomics || []
 
-    if map_size(changes) == 0 do
+    if map_size(changes) == 0 and atomics == [] do
       # No changes, return existing record
       {:ok, changeset.data}
     else
-      {sql, params} = Query.build_update(table, pkey, changes, resource)
+      {sql, params} = Query.build_update(table, pkey, changes, atomics, resource)
 
       Logger.debug("AshXTDB UPDATE: #{sql} with params: #{inspect(params)}")
 
       case repo.query(sql, params) do
         {:ok, _result} ->
+          # Note: XTDB doesn't allow SELECTs in DML transactions, so we can't
+          # refetch to get computed atomic values. We return the record with
+          # regular changes applied. For atomics, the caller must refetch.
           updated = Map.merge(changeset.data, changes)
           {:ok, updated}
 
@@ -1174,14 +1263,15 @@ defmodule AshXTDB.DataLayer do
     table = Info.table!(resource)
     return_records? = Map.get(options, :return_records?, false)
 
-    # Get the changes from changeset
+    # Get the changes and atomics from changeset
     changes = get_changes(changeset)
+    atomics = changeset.atomics || []
 
-    if map_size(changes) == 0 do
+    if map_size(changes) == 0 and atomics == [] do
       if return_records?, do: {:ok, []}, else: :ok
     else
-      # Build UPDATE with WHERE from filter
-      {sql, params} = Query.build_update_query(table, changes, query, resource)
+      # Build UPDATE with WHERE from filter, including atomics
+      {sql, params} = Query.build_update_query(table, changes, atomics, query, resource)
 
       Logger.debug("AshXTDB UPDATE QUERY: #{sql} with params: #{inspect(params)}")
 
@@ -1238,8 +1328,6 @@ defmodule AshXTDB.DataLayer do
   # Transaction Support
   # ============================================================================
 
-  @transaction_key :ash_xtdb_in_transaction
-
   @impl Ash.DataLayer
   def transaction(resource, func, _timeout, _reason) do
     repo = Info.repo!(resource)
@@ -1248,39 +1336,32 @@ defmodule AshXTDB.DataLayer do
       # Already in a transaction, just run the function
       {:ok, func.()}
     else
-      # Start a new transaction - XTDB requires explicit READ WRITE for DML
-      case repo.query("START TRANSACTION READ WRITE", []) do
-        {:ok, _} ->
-          Process.put(@transaction_key, true)
+      # Use DBConnection transaction with proper pooling
+      # We wrap in try/rescue to catch exceptions and convert to error tuples
+      try do
+        case repo.transaction(fn ->
+               try do
+                 func.()
+               catch
+                 :throw, {:ash_rollback, value} ->
+                   repo.rollback({:ash_rollback, value})
+               end
+             end) do
+          {:ok, result} ->
+            {:ok, result}
 
-          try do
-            result = func.()
+          {:error, {:ash_rollback, value}} ->
+            {:error, value}
 
-            case repo.query("COMMIT", []) do
-              {:ok, _} ->
-                {:ok, result}
+          {:error, %DBConnection.ConnectionError{} = error} ->
+            {:error, to_ash_error(error)}
 
-              {:error, error} ->
-                {:error, to_ash_error(error)}
-            end
-          rescue
-            e ->
-              repo.query("ROLLBACK", [])
-              {:error, Ash.Error.to_ash_error(e, __STACKTRACE__)}
-          catch
-            :throw, {:ash_rollback, value} ->
-              repo.query("ROLLBACK", [])
-              {:error, value}
-
-            kind, value ->
-              repo.query("ROLLBACK", [])
-              {:error, Ash.Error.to_ash_error({kind, value})}
-          after
-            Process.delete(@transaction_key)
-          end
-
-        {:error, error} ->
-          {:error, to_ash_error(error)}
+          {:error, error} ->
+            {:error, to_ash_error(error)}
+        end
+      rescue
+        e ->
+          {:error, Ash.Error.to_ash_error(e, __STACKTRACE__)}
       end
     end
   end
@@ -1288,19 +1369,13 @@ defmodule AshXTDB.DataLayer do
   @impl Ash.DataLayer
   def rollback(resource, value) do
     repo = Info.repo!(resource)
-
-    case repo.query("ROLLBACK", []) do
-      {:ok, _} -> :ok
-      {:error, _} -> :ok
-    end
-
-    Process.delete(@transaction_key)
-    throw({:ash_rollback, value})
+    repo.rollback(value)
   end
 
   @impl Ash.DataLayer
-  def in_transaction?(_resource) do
-    Process.get(@transaction_key, false)
+  def in_transaction?(resource) do
+    repo = Info.repo!(resource)
+    repo.in_transaction?()
   end
 
   # ============================================================================
@@ -1311,63 +1386,118 @@ defmodule AshXTDB.DataLayer do
     # Use String.to_atom since XTDB may return synthetic column names
     columns = Enum.map(columns, &String.to_atom/1)
 
+    # Separate calculation columns (prefixed with __calc_) from regular columns
+    {calc_columns, attr_columns} =
+      Enum.split_with(columns, fn col ->
+        col |> Atom.to_string() |> String.starts_with?("__calc_")
+      end)
+
     # Get attribute info for type casting
     attr_types = get_attribute_types(resource)
 
     Enum.map(rows, fn row ->
+      # Build a map of column -> value
+      col_values = Enum.zip(columns, row) |> Map.new()
+
+      # Extract and cast regular attributes
       attrs =
-        columns
-        |> Enum.zip(row)
-        |> Enum.map(fn {col, val} -> {col, cast_value(val, Map.get(attr_types, col))} end)
+        attr_columns
+        |> Enum.map(fn col ->
+          val = Map.get(col_values, col)
+          {col, cast_value(val, Map.get(attr_types, col))}
+        end)
         |> Map.new()
 
       # Map _id back to the primary key attribute
       attrs = map_id_to_primary_key(attrs, resource)
 
-      struct(resource, attrs)
+      # Extract SQL-calculated values
+      sql_calculations =
+        calc_columns
+        |> Enum.map(fn col ->
+          # Strip __calc_ prefix to get the original calculation name
+          calc_name =
+            col
+            |> Atom.to_string()
+            |> String.replace_prefix("__calc_", "")
+            |> String.to_atom()
+
+          {calc_name, Map.get(col_values, col)}
+        end)
+        |> Map.new()
+
+      # Create struct with __sql_calculations__ metadata
+      record = struct(resource, attrs)
+
+      # Store SQL calculations in a metadata field that add_calculations_to_records can use
+      {record, sql_calculations}
     end)
   end
 
   defp get_attribute_types(resource) do
     resource
     |> Ash.Resource.Info.attributes()
-    |> Enum.map(fn attr -> {attr.name, attr.type} end)
+    |> Enum.map(fn attr ->
+      type = Ash.Type.get_type(attr.type)
+      # Initialize constraints to get proper defaults (e.g., precision for datetime types)
+      constraints = init_constraints(type, attr.constraints)
+      {attr.name, %{type: type, constraints: constraints}}
+    end)
     |> Map.new()
-    |> Map.put(:_id, :string)
+    |> Map.put(:_id, %{type: Ash.Type.String, constraints: []})
   end
 
-  defp cast_value(nil, _type), do: nil
+  defp cast_value(nil, _type_info), do: nil
   defp cast_value(value, nil), do: value
 
-  defp cast_value(value, type) when is_binary(value) do
-    case type do
-      Ash.Type.Integer ->
-        case Integer.parse(value) do
-          {int, ""} -> int
-          _ -> value
-        end
+  defp cast_value(value, %{type: type, constraints: constraints}) do
+    # XTDB via pgwire returns raw values that need proper casting:
+    # - Atoms come as strings -> need String.to_atom
+    # - Booleans may come as "t"/"f" strings -> need explicit conversion
+    # - Maps may come as JSON strings -> cast_input handles this
+    # - DateTimes come as strings -> cast_input handles this
+    cond do
+      # Boolean type with string value - XTDB often returns "t"/"f"
+      type == Ash.Type.Boolean and is_binary(value) ->
+        coerce_boolean(value)
 
-      Ash.Type.Float ->
-        case Float.parse(value) do
-          {float, ""} -> float
-          _ -> value
-        end
+      # Atom type with string value - convert string to atom
+      type == Ash.Type.Atom and is_binary(value) ->
+        String.to_atom(value)
 
-      Ash.Type.Boolean ->
-        case value do
-          "true" -> true
-          "t" -> true
-          "false" -> false
-          "f" -> false
-          _ -> value
-        end
+      # Try cast_input first (handles JSON strings for maps, datetime strings, etc.)
+      true ->
+        case Ash.Type.cast_input(type, value, constraints) do
+          {:ok, casted} ->
+            casted
 
-      _ ->
-        value
+          _ ->
+            # Fall back to cast_stored for already-typed values
+            case Ash.Type.cast_stored(type, value, constraints) do
+              {:ok, casted} -> casted
+              :error -> value
+            end
+        end
     end
   end
 
-  defp cast_value(value, _type), do: value
+  defp cast_value(value, _type_info), do: value
+
+  # Coerce XTDB boolean string representations to Elixir booleans
+  defp coerce_boolean(value) when value in ["t", "true", "TRUE", "1", "yes", "YES"], do: true
+  defp coerce_boolean(value) when value in ["f", "false", "FALSE", "0", "no", "NO", ""], do: false
+  defp coerce_boolean(value), do: value
+
+  defp init_constraints(type, constraints) do
+    if function_exported?(type, :init, 1) do
+      case type.init(constraints) do
+        {:ok, initialized} -> initialized
+        _ -> constraints
+      end
+    else
+      constraints
+    end
+  end
 
   defp map_id_to_primary_key(attrs, resource) do
     case Ash.Resource.Info.primary_key(resource) do

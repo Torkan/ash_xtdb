@@ -176,8 +176,9 @@ defmodule AshXTDB.Query.Nested do
     through_dest_col = format_column(through_alias, dest_attr_on_join)
     through_source_col = format_column(through_alias, source_attr_on_join)
 
+    quoted_through_table = AshXTDB.Query.quote_identifier(through_table)
     subquery =
-      "#{dest_col} IN (SELECT #{through_dest_col} FROM #{through_table} #{through_alias} WHERE #{through_source_col} = #{parent_col})"
+      "#{dest_col} IN (SELECT #{through_dest_col} FROM #{quoted_through_table} #{through_alias} WHERE #{through_source_col} = #{parent_col})"
 
     {subquery, []}
   end
@@ -272,7 +273,8 @@ defmodule AshXTDB.Query.Nested do
   defp format_column(table_alias, :_id), do: "#{table_alias}.\"_id\""
 
   defp format_column(table_alias, attr) when is_atom(attr) do
-    "#{table_alias}.#{Atom.to_string(attr)}"
+    quoted_col = AshXTDB.Query.quote_identifier(Atom.to_string(attr))
+    "#{table_alias}.#{quoted_col}"
   end
 
   defp ensure_id_column(columns) do

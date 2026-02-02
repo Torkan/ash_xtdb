@@ -170,7 +170,72 @@ defmodule AshXTDB.NestedResult do
   defp decode_nested_item(item), do: item
 
   defp to_struct(attrs, resource) do
-    # Create struct with the nested attributes
-    struct(resource, attrs)
+    # Cast attribute values before creating struct
+    attr_types = get_attribute_types(resource)
+
+    casted_attrs =
+      Enum.map(attrs, fn {key, value} ->
+        case Map.get(attr_types, key) do
+          nil ->
+            {key, value}
+
+          type_info ->
+            {key, cast_value(value, type_info)}
+        end
+      end)
+      |> Map.new()
+
+    struct(resource, casted_attrs)
+  end
+
+  defp get_attribute_types(resource) do
+    resource
+    |> Ash.Resource.Info.attributes()
+    |> Enum.map(fn attr ->
+      type = Ash.Type.get_type(attr.type)
+      # Initialize constraints to get proper defaults (e.g., precision for datetime types)
+      constraints = init_constraints(type, attr.constraints)
+      {attr.name, %{type: type, constraints: constraints}}
+    end)
+    |> Map.new()
+  end
+
+  defp init_constraints(type, constraints) do
+    if function_exported?(type, :init, 1) do
+      case type.init(constraints) do
+        {:ok, initialized} -> initialized
+        _ -> constraints
+      end
+    else
+      constraints
+    end
+  end
+
+  defp cast_value(nil, _type_info), do: nil
+
+  defp cast_value(value, %{type: type, constraints: constraints}) do
+    # XTDB via pgwire returns raw values that need proper casting:
+    # - Atoms come as strings -> need String.to_atom
+    # - Maps may come as JSON strings -> cast_input handles this
+    # - DateTimes come as strings -> cast_input handles this
+    cond do
+      # Atom type with string value - convert string to atom
+      type == Ash.Type.Atom and is_binary(value) ->
+        String.to_atom(value)
+
+      # Try cast_input first (handles JSON strings for maps, datetime strings, etc.)
+      true ->
+        case Ash.Type.cast_input(type, value, constraints) do
+          {:ok, casted} ->
+            casted
+
+          _ ->
+            # Fall back to cast_stored for already-typed values
+            case Ash.Type.cast_stored(type, value, constraints) do
+              {:ok, casted} -> casted
+              :error -> value
+            end
+        end
+    end
   end
 end

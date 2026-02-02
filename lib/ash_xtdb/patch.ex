@@ -122,11 +122,12 @@ defmodule AshXTDB.Patch do
   def build_patch_sql(table, records, valid_from, valid_to) do
     records_clause = build_records_clause(records)
     valid_time_clause = build_valid_time_clause(valid_from, valid_to)
+    quoted_table = AshXTDB.Query.quote_identifier(table)
 
     if valid_time_clause do
-      "PATCH INTO #{table} #{valid_time_clause} RECORDS #{records_clause}"
+      "PATCH INTO #{quoted_table} #{valid_time_clause} RECORDS #{records_clause}"
     else
-      "PATCH INTO #{table} RECORDS #{records_clause}"
+      "PATCH INTO #{quoted_table} RECORDS #{records_clause}"
     end
   end
 

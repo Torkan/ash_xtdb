@@ -30,7 +30,7 @@ defmodule AshXTDB.NestedSubqueryTest do
 
       assert sql =~ "NEST_MANY("
       assert sql =~ "FROM posts n"
-      assert sql =~ "n.user_id = t.\"_id\""
+      assert sql =~ "n.\"user_id\" = t.\"_id\""
       assert sql =~ "AS \"posts\""
       assert sql =~ "FETCH FIRST 5 ROWS ONLY"
     end
@@ -63,7 +63,7 @@ defmodule AshXTDB.NestedSubqueryTest do
 
       {sql, _params} = Nested.build_subquery(nested_config, "t")
 
-      assert sql =~ "ORDER BY n.title ASC"
+      assert sql =~ "ORDER BY n.\"title\" ASC"
     end
 
     test "includes OFFSET clause when offset is specified" do
@@ -105,7 +105,7 @@ defmodule AshXTDB.NestedSubqueryTest do
 
       assert sql =~ "NEST_MANY("
       assert sql =~ "FROM tags n"
-      assert sql =~ "n.\"_id\" IN (SELECT th.tag_id FROM post_tags th WHERE th.post_id = t.\"_id\")"
+      assert sql =~ "n.\"_id\" IN (SELECT th.\"tag_id\" FROM \"post_tags\" th WHERE th.\"post_id\" = t.\"_id\")"
       assert sql =~ "AS \"tags\""
     end
   end
@@ -343,8 +343,9 @@ defmodule AshXTDB.NestedSubqueryTest do
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[_id, _name, posts_raw]]}} ->
           posts = parse_nested(posts_raw)
-          # Should return empty array, not nil
-          assert posts == [] or posts == nil
+          # Should return empty array for user with no posts
+          # XTDB may return nil or [] for empty nested results
+          assert posts in [[], nil], "Expected empty array or nil, got: #{inspect(posts)}"
 
         {:error, error} ->
           flunk("NEST_MANY for user with no posts failed: #{inspect(error)}")

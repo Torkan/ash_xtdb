@@ -367,7 +367,7 @@ defmodule AshXTDB.AdvancedQueryTest do
       combined = Query.union(query1, query2)
       {sql, _params} = Query.to_sql(combined, :select)
 
-      assert sql =~ "FROM users t"
+      assert sql =~ "FROM \"users\" t"
       assert sql =~ "UNION SELECT"
     end
 
@@ -385,6 +385,10 @@ defmodule AshXTDB.AdvancedQueryTest do
         })
 
       assert length(query.window_functions) == 1
+      [window_fn] = query.window_functions
+      assert window_fn.name == :row_num
+      assert window_fn.function == :row_number
+      assert window_fn.order_by == [{:age, :asc}]
     end
 
     test "add_cte helper works" do
@@ -403,7 +407,10 @@ defmodule AshXTDB.AdvancedQueryTest do
         |> Query.add_cte("my_cte", inner_query)
 
       assert length(query.ctes) == 1
-      assert hd(query.ctes).name == "my_cte"
+      [cte] = query.ctes
+      assert cte.name == "my_cte"
+      assert cte.query == inner_query
+      assert cte.query.table == "users"
     end
   end
 

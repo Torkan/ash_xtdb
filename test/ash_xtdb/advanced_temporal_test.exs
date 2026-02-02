@@ -291,7 +291,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           to
         )
 
-      assert sql =~ "UPDATE users FOR PORTION OF VALID_TIME"
+      assert sql =~ "UPDATE \"users\" FOR PORTION OF VALID_TIME"
       assert sql =~ "FROM TIMESTAMP '2024-01-01T00:00:00Z'"
       assert sql =~ "TO TIMESTAMP '2024-06-30T23:59:59Z'"
       assert sql =~ "SET name = $1"
@@ -311,7 +311,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           to
         )
 
-      assert sql =~ "DELETE FROM users FOR PORTION OF VALID_TIME"
+      assert sql =~ "DELETE FROM \"users\" FOR PORTION OF VALID_TIME"
       assert sql =~ "FROM TIMESTAMP '2024-01-01T00:00:00Z'"
       assert sql =~ "TO TIMESTAMP '2024-06-30T23:59:59Z'"
       assert params == ["test-id"]
@@ -330,7 +330,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           to
         )
 
-      assert sql =~ "INSERT INTO users"
+      assert sql =~ "INSERT INTO \"users\""
       assert sql =~ "_valid_from"
       assert sql =~ "_valid_to"
       # Verify the timestamps are in the params
@@ -349,7 +349,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           nil
         )
 
-      assert sql =~ "PATCH INTO users"
+      assert sql =~ "PATCH INTO \"users\""
       assert sql =~ "RECORDS"
       assert sql =~ "_id: '1'"
       assert sql =~ "email: 'a@test.com'"
@@ -368,7 +368,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           nil
         )
 
-      assert sql =~ "PATCH INTO users RECORDS"
+      assert sql =~ "PATCH INTO \"users\" RECORDS"
       # Should have two record objects separated by comma
       assert sql =~ "}, {"
     end
@@ -385,7 +385,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           to
         )
 
-      assert sql =~ "PATCH INTO users"
+      assert sql =~ "PATCH INTO \"users\""
       assert sql =~ "FOR PORTION OF VALID_TIME"
       assert sql =~ "FROM TIMESTAMP '2024-01-01T00:00:00Z'"
       assert sql =~ "TO TIMESTAMP '2024-06-30T23:59:59Z'"

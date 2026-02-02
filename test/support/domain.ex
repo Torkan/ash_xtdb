@@ -14,7 +14,12 @@ defmodule AshXTDB.Test.Domain do
     resource AshXTDB.Test.Post
     resource AshXTDB.Test.Tag
     resource AshXTDB.Test.PostTag
+    resource AshXTDB.Test.Comment
+    resource AshXTDB.Test.Category
+    resource AshXTDB.Test.Project
+    resource AshXTDB.Test.UserProject
     resource AshXTDB.Test.UserWithCalculations
     resource AshXTDB.Test.PostWithTenant
+    resource AshXTDB.Test.ExpressionTestResource
   end
 end

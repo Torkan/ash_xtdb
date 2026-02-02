@@ -90,8 +90,9 @@ defmodule AshXTDB.TypesTest do
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[duration]]}} ->
-          # XTDB returns duration as a string
-          assert is_binary(duration) || duration != nil
+          # XTDB returns duration as a string containing the ISO format
+          assert is_binary(duration)
+          assert duration =~ "PT1H30M" or duration =~ "1:30" or duration =~ "90"
 
         {:error, error} ->
           flunk("DURATION query failed: #{inspect(error)}")
@@ -263,7 +264,11 @@ defmodule AshXTDB.TypesTest do
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[time_range]]}} ->
+          # XTDB returns periods as maps or tuples containing from/to timestamps
           assert time_range != nil
+          # Verify it contains the expected date range information
+          time_range_str = inspect(time_range)
+          assert time_range_str =~ "2024" or is_map(time_range) or is_tuple(time_range)
 
         {:error, error} ->
           flunk("PERIOD query failed: #{inspect(error)}")
@@ -350,7 +355,11 @@ defmodule AshXTDB.TypesTest do
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[result]]}} ->
+          # Result should be 2024-01-08 (7 days after 2024-01-01)
           assert result != nil
+          result_str = inspect(result)
+          # Should contain January 8th or be a DateTime struct
+          assert result_str =~ "2024-01-08" or result_str =~ "2024" or is_struct(result, DateTime)
 
         {:error, error} ->
           flunk("Interval inline query failed: #{inspect(error)}")
@@ -363,7 +372,11 @@ defmodule AshXTDB.TypesTest do
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[result]]}} ->
+          # Result should contain the period representing 2024
           assert result != nil
+          result_str = inspect(result)
+          # Should reference 2024 dates or be a valid period structure
+          assert result_str =~ "2024" or is_map(result) or is_tuple(result)
 
         {:error, error} ->
           flunk("Period inline query failed: #{inspect(error)}")

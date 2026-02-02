@@ -44,13 +44,15 @@ defmodule AshXTDB.Connection do
     username = Keyword.get(opts, :username, "xtdb")
     database = Keyword.get(opts, :database, "xtdb")
     connect_timeout = Keyword.get(opts, :connect_timeout, 15_000)
+    user_socket_opts = Keyword.get(opts, :socket_options, [])
 
-    socket_opts = [
-      :binary,
-      active: false,
-      packet: :raw,
-      send_timeout: connect_timeout
-    ]
+    socket_opts =
+      [
+        :binary,
+        active: false,
+        packet: :raw,
+        send_timeout: connect_timeout
+      ] ++ user_socket_opts
 
     hostname_charlist = if is_binary(hostname), do: to_charlist(hostname), else: hostname
 

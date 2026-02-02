@@ -6,6 +6,6 @@ import Config
 config :ash_xtdb, AshXTDB.TestRepo,
   hostname: "localhost",
   port: 5433,
-  database: "xtdb"
+  database: "ash_xtdb_test"
 
 config :logger, level: :warning

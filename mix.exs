@@ -57,6 +57,7 @@ defmodule AshXTDB.MixProject do
   defp deps do
     [
       {:ash, "~> 3.0"},
+      {:ash_sql, "~> 0.4"},
       {:spark, "~> 2.0"},
       {:postgrex, "~> 0.19"},
       {:jason, "~> 1.0"},

@@ -43,4 +43,20 @@ defmodule AshXTDB.DataLayer.Info do
       :error -> raise "No table configured for #{inspect(resource)}"
     end
   end
+
+  @doc """
+  Returns whether the `_valid_from` attribute is public.
+  """
+  @spec valid_from_public?(Ash.Resource.t()) :: boolean()
+  def valid_from_public?(resource) do
+    Spark.Dsl.Extension.get_opt(resource, [:xtdb], :valid_from_public?, false)
+  end
+
+  @doc """
+  Returns whether the `_valid_to` attribute is public.
+  """
+  @spec valid_to_public?(Ash.Resource.t()) :: boolean()
+  def valid_to_public?(resource) do
+    Spark.Dsl.Extension.get_opt(resource, [:xtdb], :valid_to_public?, false)
+  end
 end

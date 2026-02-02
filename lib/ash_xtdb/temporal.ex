@@ -317,7 +317,8 @@ defmodule AshXTDB.Temporal do
     pkey_attr = Ash.Resource.Info.primary_key(resource) |> List.first()
     pkey_value = Map.get(record, pkey_attr)
 
-    sql = "ERASE FROM #{table} WHERE #{table}.\"_id\" = $1"
+    quoted_table = AshXTDB.Query.quote_identifier(table)
+    sql = "ERASE FROM #{quoted_table} WHERE #{quoted_table}.\"_id\" = $1"
     inlined_sql = AshXTDB.Query.inline_params(sql, [pkey_value])
 
     case repo.query(inlined_sql, []) do

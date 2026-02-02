@@ -151,13 +151,13 @@ defmodule AshXTDB.SortNullsTest do
 
   describe "SQL generation verification" do
     test "generates correct SQL for asc_nils_first" do
-      query = %AshXTDB.Query{
+      query = %AshXTDB.SQL{
         resource: AshXTDB.Test.User,
         table: "users",
         sort: [{:age, :asc_nils_first}]
       }
 
-      {sql, _params} = AshXTDB.Query.to_sql(query, :select)
+      {sql, _params} = AshXTDB.SQL.to_sql(query, :select)
 
       assert sql =~ "ORDER BY"
       assert sql =~ "ASC NULLS FIRST"
@@ -165,13 +165,13 @@ defmodule AshXTDB.SortNullsTest do
 
     test "generates swapped SQL for desc_nils_first due to XTDB quirk" do
       # XTDB reverses NULLS FIRST/LAST for DESC, so we swap to compensate
-      query = %AshXTDB.Query{
+      query = %AshXTDB.SQL{
         resource: AshXTDB.Test.User,
         table: "users",
         sort: [{:age, :desc_nils_first}]
       }
 
-      {sql, _params} = AshXTDB.Query.to_sql(query, :select)
+      {sql, _params} = AshXTDB.SQL.to_sql(query, :select)
 
       assert sql =~ "ORDER BY"
       # We generate "DESC NULLS LAST" to get "nulls first" behavior in XTDB
@@ -179,13 +179,13 @@ defmodule AshXTDB.SortNullsTest do
     end
 
     test "generates swapped SQL for desc_nils_last due to XTDB quirk" do
-      query = %AshXTDB.Query{
+      query = %AshXTDB.SQL{
         resource: AshXTDB.Test.User,
         table: "users",
         sort: [{:age, :desc_nils_last}]
       }
 
-      {sql, _params} = AshXTDB.Query.to_sql(query, :select)
+      {sql, _params} = AshXTDB.SQL.to_sql(query, :select)
 
       assert sql =~ "ORDER BY"
       # We generate "DESC NULLS FIRST" to get "nulls last" behavior in XTDB

@@ -236,7 +236,7 @@ defmodule AshXTDB.MissingCoverageTest do
         right: 2
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(expr, state)
 
       assert sql =~ "t.\"age\""
       assert sql =~ "*"
@@ -259,7 +259,7 @@ defmodule AshXTDB.MissingCoverageTest do
         right: 10
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(expr, state)
 
       assert sql =~ "t.\"age\""
       assert sql =~ "/"
@@ -281,7 +281,7 @@ defmodule AshXTDB.MissingCoverageTest do
         arguments: [%Ash.Query.Ref{attribute: :name, relationship_path: []}]
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(expr, state)
 
       assert sql == "TRIM(t.\"name\")"
     end

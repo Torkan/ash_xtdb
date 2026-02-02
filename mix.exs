@@ -114,12 +114,14 @@ defmodule AshXTDB.MixProject do
         Repo: [
           AshXTDB.Repo
         ],
-        Temporal: [
-          AshXTDB.Temporal
-        ],
-        Query: [
+        "Query & Changeset": [
           AshXTDB.Query,
-          AshXTDB.Query.Filter
+          AshXTDB.Changeset
+        ],
+        SQL: [
+          AshXTDB.SQL,
+          AshXTDB.SQL.Filter,
+          AshXTDB.SQL.Nested
         ]
       ]
     ]

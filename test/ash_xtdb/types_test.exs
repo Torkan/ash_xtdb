@@ -12,7 +12,7 @@ defmodule AshXTDB.TypesTest do
   alias AshXTDB.Types.Interval
   alias AshXTDB.Types.Period
   alias AshXTDB.Types.URI, as: URIType
-  alias AshXTDB.Query
+  alias AshXTDB.SQL
 
   @moduletag :integration
 
@@ -328,10 +328,10 @@ defmodule AshXTDB.TypesTest do
   # Query Integration Tests
   # ============================================================================
 
-  describe "Query.escape_value for types" do
+  describe "SQL.escape_value for types" do
     test "escapes Interval struct" do
       interval = %Interval{years: 1, months: 2}
-      assert Query.inline_params("SELECT $1", [interval]) == "SELECT DURATION 'P1Y2M'"
+      assert SQL.inline_params("SELECT $1", [interval]) == "SELECT DURATION 'P1Y2M'"
     end
 
     test "escapes Period struct" do
@@ -341,7 +341,7 @@ defmodule AshXTDB.TypesTest do
           ~U[2024-12-31 23:59:59Z]
         )
 
-      result = Query.inline_params("SELECT $1", [period])
+      result = SQL.inline_params("SELECT $1", [period])
 
       assert result ==
                "SELECT PERIOD(TIMESTAMP '2024-01-01T00:00:00Z', TIMESTAMP '2024-12-31T23:59:59Z')"
@@ -351,7 +351,7 @@ defmodule AshXTDB.TypesTest do
   describe "SQL execution with inlined type values" do
     test "executes query with inlined Interval" do
       interval = %Interval{days: 7}
-      sql = Query.inline_params("SELECT TIMESTAMP '2024-01-01T00:00:00Z' + $1 AS future", [interval])
+      sql = SQL.inline_params("SELECT TIMESTAMP '2024-01-01T00:00:00Z' + $1 AS future", [interval])
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[result]]}} ->
@@ -368,7 +368,7 @@ defmodule AshXTDB.TypesTest do
 
     test "executes query with inlined Period" do
       period = Period.new(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
-      sql = Query.inline_params("SELECT $1 AS time_range", [period])
+      sql = SQL.inline_params("SELECT $1 AS time_range", [period])
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[result]]}} ->

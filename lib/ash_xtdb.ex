@@ -64,20 +64,20 @@ defmodule AshXTDB do
 
   ## Bitemporal Queries
 
-  XTDB's unique bitemporal capabilities are exposed via `AshXTDB.Temporal`:
+  XTDB's unique bitemporal capabilities are exposed via `AshXTDB.Query` and `AshXTDB.Changeset`:
 
       # Query data as it was at a specific point in time
       User
-      |> AshXTDB.Temporal.as_of_valid_time(~U[2024-01-01 00:00:00Z])
+      |> AshXTDB.Query.as_of_valid_time(~U[2024-01-01 00:00:00Z])
       |> Ash.read!()
 
       # Query the full history
       User
-      |> AshXTDB.Temporal.for_all_valid_time()
+      |> AshXTDB.Query.for_all_valid_time()
       |> Ash.read!()
 
       # GDPR: Permanently erase a record from all history
-      AshXTDB.Temporal.erase!(user)
+      AshXTDB.Changeset.erase!(user)
 
   ## XTDB-Specific Considerations
 

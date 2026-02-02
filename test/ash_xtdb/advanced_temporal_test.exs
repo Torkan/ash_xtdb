@@ -10,8 +10,9 @@ defmodule AshXTDB.AdvancedTemporalTest do
   """
   use ExUnit.Case, async: false
 
+  alias AshXTDB.SQL
   alias AshXTDB.Query
-  alias AshXTDB.Temporal
+  alias AshXTDB.Changeset
   alias AshXTDB.Patch
   alias AshXTDB.Test.User
 
@@ -40,7 +41,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       to = ~U[2024-06-30 23:59:59Z]
 
       {sql, params} =
-        Query.build_update_for_portion(
+        SQL.build_update_for_portion(
           "users",
           %{id: user.id},
           %{name: "Updated Name"},
@@ -49,7 +50,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           to
         )
 
-      inlined_sql = Query.inline_params(sql, params)
+      inlined_sql = SQL.inline_params(sql, params)
 
       case AshXTDB.TestRepo.query(inlined_sql, []) do
         {:ok, _} ->
@@ -79,7 +80,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       to = ~U[2024-06-30 23:59:59Z]
 
       {sql, params} =
-        Query.build_delete_for_portion(
+        SQL.build_delete_for_portion(
           "users",
           %{id: user.id},
           User,
@@ -87,7 +88,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           to
         )
 
-      inlined_sql = Query.inline_params(sql, params)
+      inlined_sql = SQL.inline_params(sql, params)
 
       case AshXTDB.TestRepo.query(inlined_sql, []) do
         {:ok, _} ->
@@ -105,7 +106,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       to = ~U[2023-12-31 23:59:59Z]
 
       {sql, params} =
-        Query.build_insert_with_valid_time(
+        SQL.build_insert_with_valid_time(
           "users",
           %{_id: Ash.UUID.generate(), email: "setting@test.com", name: "Setting User"},
           User,
@@ -113,7 +114,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           to
         )
 
-      inlined_sql = Query.inline_params(sql, params)
+      inlined_sql = SQL.inline_params(sql, params)
 
       case AshXTDB.TestRepo.query(inlined_sql, []) do
         {:ok, _} ->
@@ -121,7 +122,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           # Query with FOR ALL VALID_TIME to see all versions
           all_users =
             User
-            |> Temporal.for_all_valid_time()
+            |> Query.for_all_valid_time()
             |> Ash.read!()
 
           assert Enum.any?(all_users, fn u -> u.email == "setting@test.com" end)
@@ -135,21 +136,21 @@ defmodule AshXTDB.AdvancedTemporalTest do
       from = ~U[2024-06-01 00:00:00Z]
 
       {sql, params} =
-        Query.build_insert_with_valid_from(
+        SQL.build_insert_with_valid_from(
           "users",
           %{_id: Ash.UUID.generate(), email: "valid_from@test.com", name: "Valid From User"},
           User,
           from
         )
 
-      inlined_sql = Query.inline_params(sql, params)
+      inlined_sql = SQL.inline_params(sql, params)
 
       case AshXTDB.TestRepo.query(inlined_sql, []) do
         {:ok, _} ->
           # Query with FOR ALL VALID_TIME
           all_users =
             User
-            |> Temporal.for_all_valid_time()
+            |> Query.for_all_valid_time()
             |> Ash.read!()
 
           assert Enum.any?(all_users, fn u -> u.email == "valid_from@test.com" end)
@@ -174,7 +175,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       changeset =
         user
         |> Ash.Changeset.for_update(:update, %{name: "Updated"})
-        |> Temporal.for_portion_of_valid_time(from, to)
+        |> Changeset.for_portion_of_valid_time(from, to)
 
       temporal = changeset.context[:temporal]
       assert temporal[:portion_of_valid_time] == {from, to}
@@ -187,7 +188,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       changeset =
         User
         |> Ash.Changeset.for_create(:create, %{email: "setting_ctx@test.com"})
-        |> Temporal.setting_valid_time(from, to)
+        |> Changeset.setting_valid_time(from, to)
 
       temporal = changeset.context[:temporal]
       assert temporal[:setting_valid_time] == {from, to}
@@ -199,7 +200,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       changeset =
         User
         |> Ash.Changeset.for_create(:create, %{email: "from_ctx@test.com"})
-        |> Temporal.setting_valid_from(from)
+        |> Changeset.setting_valid_from(from)
 
       temporal = changeset.context[:temporal]
       assert temporal[:setting_valid_from] == from
@@ -282,7 +283,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       to = ~U[2024-06-30 23:59:59Z]
 
       {sql, params} =
-        Query.build_update_for_portion(
+        SQL.build_update_for_portion(
           "users",
           %{id: "test-id"},
           %{name: "New Name"},
@@ -303,7 +304,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       to = ~U[2024-06-30 23:59:59Z]
 
       {sql, params} =
-        Query.build_delete_for_portion(
+        SQL.build_delete_for_portion(
           "users",
           %{id: "test-id"},
           User,
@@ -322,7 +323,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       to = ~U[2024-12-31 23:59:59Z]
 
       {sql, params} =
-        Query.build_insert_with_valid_time(
+        SQL.build_insert_with_valid_time(
           "users",
           %{_id: "test-id", name: "Test"},
           User,

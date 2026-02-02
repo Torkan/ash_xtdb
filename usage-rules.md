@@ -586,21 +586,21 @@ XTDB maintains two time dimensions:
 ### Valid Time Queries
 
 ```elixir
-alias AshXTDB.Temporal
+alias AshXTDB.Query
 
 # Query as of a specific valid time
 User
-|> Temporal.as_of_valid_time(~U[2024-01-01 00:00:00Z])
+|> Query.as_of_valid_time(~U[2024-01-01 00:00:00Z])
 |> Ash.read!()
 
 # Query all valid time history
 User
-|> Temporal.for_all_valid_time()
+|> Query.for_all_valid_time()
 |> Ash.read!()
 
 # Query valid time range
 User
-|> Temporal.for_valid_time_between(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
+|> Query.for_valid_time_between(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
 |> Ash.read!()
 ```
 
@@ -609,12 +609,12 @@ User
 ```elixir
 # See what database looked like at a point in time
 User
-|> Temporal.as_of_system_time(~U[2024-01-01 00:00:00Z])
+|> Query.as_of_system_time(~U[2024-01-01 00:00:00Z])
 |> Ash.read!()
 
 # Query complete audit history
 User
-|> Temporal.for_all_system_time()
+|> Query.for_all_system_time()
 |> Ash.read!()
 ```
 
@@ -622,8 +622,8 @@ User
 ```elixir
 # What did we think was valid on June 1st, as of January 1st's knowledge?
 User
-|> Temporal.as_of_valid_time(~U[2024-06-01 00:00:00Z])
-|> Temporal.as_of_system_time(~U[2024-01-01 00:00:00Z])
+|> Query.as_of_valid_time(~U[2024-06-01 00:00:00Z])
+|> Query.as_of_system_time(~U[2024-01-01 00:00:00Z])
 |> Ash.read!()
 ```
 
@@ -633,14 +633,14 @@ User
 # Insert with specific valid time
 User
 |> Ash.Changeset.for_create(:create, attrs)
-|> Temporal.with_valid_from(~U[2024-01-01 00:00:00Z])
-|> Temporal.with_valid_to(~U[2024-12-31 23:59:59Z])
+|> Changeset.with_valid_from(~U[2024-01-01 00:00:00Z])
+|> Changeset.with_valid_to(~U[2024-12-31 23:59:59Z])
 |> Ash.create!()
 
 # Shorthand for both
 User
 |> Ash.Changeset.for_create(:create, attrs)
-|> Temporal.with_valid_time(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
+|> Changeset.with_valid_time(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
 |> Ash.create!()
 ```
 
@@ -649,14 +649,14 @@ User
 # Update only for a portion of the valid time
 user
 |> Ash.Changeset.for_update(:update, %{status: "on_leave"})
-|> Temporal.for_portion_of_valid_time(~U[2024-07-01 00:00:00Z], ~U[2024-07-31 23:59:59Z])
+|> Changeset.for_portion_of_valid_time(~U[2024-07-01 00:00:00Z], ~U[2024-07-31 23:59:59Z])
 |> Ash.update!()
 ```
 
 ### GDPR Compliance (ERASE)
 ```elixir
 # Permanently erase from all history (right to be forgotten)
-Temporal.erase!(user)
+Changeset.erase!(user)
 ```
 
 **Warning**: ERASE is irreversible and removes all audit history.

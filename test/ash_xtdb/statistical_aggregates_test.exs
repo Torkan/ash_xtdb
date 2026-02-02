@@ -11,7 +11,7 @@ defmodule AshXTDB.StatisticalAggregatesTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Query
+  alias AshXTDB.SQL
   alias AshXTDB.Test.User
 
   @moduletag :integration
@@ -266,14 +266,14 @@ defmodule AshXTDB.StatisticalAggregatesTest do
     test "generates correct STDDEV_POP SQL" do
       agg = %{kind: :stddev_pop, field: :age, name: :age_stddev}
 
-      query = %Query{
+      query = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "users",
         aggregates: [agg]
       }
 
-      {sql, _params} = Query.to_aggregate_sql(query, [agg])
+      {sql, _params} = SQL.to_aggregate_sql(query, [agg])
 
       assert sql =~ "STDDEV_POP(t.age)"
       assert sql =~ "AS \"age_stddev\""
@@ -282,14 +282,14 @@ defmodule AshXTDB.StatisticalAggregatesTest do
     test "generates correct BOOL_AND SQL" do
       agg = %{kind: :bool_and, field: :active, name: :all_active}
 
-      query = %Query{
+      query = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "users",
         aggregates: [agg]
       }
 
-      {sql, _params} = Query.to_aggregate_sql(query, [agg])
+      {sql, _params} = SQL.to_aggregate_sql(query, [agg])
 
       assert sql =~ "BOOL_AND(t.active)"
     end

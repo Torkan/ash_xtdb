@@ -168,7 +168,7 @@ For reference, these features were tested and work correctly:
 
 When investigating issues, useful debugging approaches:
 
-1. **Check generated SQL:** Add logging to `AshXTDB.Query.to_sql/2` to see the actual SQL being generated.
+1. **Check generated SQL:** Add logging to `AshXTDB.SQL.to_sql/2` to see the actual SQL being generated.
 
 2. **Test SQL directly:** Run the generated SQL directly against XTDB to isolate whether the issue is SQL generation or query execution.
 

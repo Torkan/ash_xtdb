@@ -366,7 +366,7 @@ defmodule MyApp.Workers.XTDBSync do
 
   defp sync_create(table, data, resource) do
     record = atomize_keys(data)
-    {sql, params} = AshXTDB.Query.build_insert(table, record, resource)
+    {sql, params} = AshXTDB.SQL.build_insert(table, record, resource)
     execute_sql(sql, params)
   end
 
@@ -381,7 +381,7 @@ defmodule MyApp.Workers.XTDBSync do
   end
 
   defp execute_sql(sql, params) do
-    inlined_sql = AshXTDB.Query.inline_params(sql, params)
+    inlined_sql = AshXTDB.SQL.inline_params(sql, params)
 
     case MyApp.XTDBRepo.query(inlined_sql, []) do
       {:ok, _} -> :ok
@@ -422,7 +422,7 @@ defmodule MyApp.Users do
   Historical operations use XTDB (bitemporal, time-travel, audit).
   """
 
-  alias AshXTDB.Temporal
+  alias AshXTDB.Query
 
   # ===========================================================================
   # Current State (PostgreSQL)
@@ -819,8 +819,8 @@ defmodule MyApp.Workers.BackfillStatus do
       _valid_from: @backfill_valid_from
     }
 
-    {sql, params} = AshXTDB.Query.build_insert("users", record, MyApp.User)
-    inlined_sql = AshXTDB.Query.inline_params(sql, params)
+    {sql, params} = AshXTDB.SQL.build_insert("users", record, MyApp.User)
+    inlined_sql = AshXTDB.SQL.inline_params(sql, params)
 
     MyApp.XTDBRepo.query(inlined_sql, [])
   end
@@ -837,7 +837,7 @@ end
 **Query behavior after backfill:**
 
 ```elixir
-alias AshXTDB.Temporal
+alias AshXTDB.Query
 
 # VALID TIME QUERY: "What was the user's status on 2023-01-01?"
 # Uses latest system knowledge (v2) → sees status = 'active'

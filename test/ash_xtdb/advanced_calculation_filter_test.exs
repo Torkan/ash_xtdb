@@ -691,7 +691,7 @@ defmodule AshXTDB.AdvancedCalculationFilterTest do
       # We can inspect the filter's SQL generation directly
       filter = Ash.Query.filter(User, age_bracket == "Young Adult") |> Map.get(:filter)
       table = AshXTDB.DataLayer.Info.table!(User)
-      {where_clause, _params, _joins} = AshXTDB.Query.Filter.to_sql(filter, User, table)
+      {where_clause, _params, _joins} = AshXTDB.SQL.Filter.to_sql(filter, User, table)
 
       # The WHERE clause should contain "CASE WHEN" pattern
       assert where_clause =~ "CASE WHEN"

@@ -10,12 +10,12 @@ defmodule AshXTDB.NestedSubqueryTest do
   use ExUnit.Case, async: false
 
   alias AshXTDB.Test.{User, Post, Tag}
-  alias AshXTDB.Query.Nested
+  alias AshXTDB.SQL.Nested
   alias AshXTDB.NestedResult
 
   require Ash.Query
 
-  describe "Query.Nested.build_subquery/2" do
+  describe "SQL.Nested.build_subquery/2" do
     test "builds NEST_MANY subquery SQL" do
       nested_config = %{
         name: :posts,

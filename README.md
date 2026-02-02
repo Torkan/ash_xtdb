@@ -135,7 +135,7 @@ Ash.destroy!(user)
 
 ## Bitemporal Queries
 
-XTDB's unique bitemporal capabilities are exposed via `AshXTDB.Temporal`:
+XTDB's unique bitemporal capabilities are exposed via `AshXTDB.Query` and `AshXTDB.Changeset`:
 
 ### Valid Time Queries
 
@@ -144,17 +144,17 @@ Query data as it was/will be valid at specific points in time:
 ```elixir
 # Query data as it was valid on a specific date
 MyApp.User
-|> AshXTDB.Temporal.as_of_valid_time(~U[2024-01-01 00:00:00Z])
+|> AshXTDB.Query.as_of_valid_time(~U[2024-01-01 00:00:00Z])
 |> Ash.read!()
 
 # Query all historical versions
 MyApp.User
-|> AshXTDB.Temporal.for_all_valid_time()
+|> AshXTDB.Query.for_all_valid_time()
 |> Ash.read!()
 
 # Query data valid within a time range
 MyApp.User
-|> AshXTDB.Temporal.for_valid_time_between(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
+|> AshXTDB.Query.for_valid_time_between(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
 |> Ash.read!()
 ```
 
@@ -165,12 +165,12 @@ Query the database state as it existed at a specific system time (for auditing):
 ```elixir
 # Query what the database contained at a specific moment
 MyApp.User
-|> AshXTDB.Temporal.as_of_system_time(~U[2024-06-01 12:00:00Z])
+|> AshXTDB.Query.as_of_system_time(~U[2024-06-01 12:00:00Z])
 |> Ash.read!()
 
 # Query all system time versions (full audit trail)
 MyApp.User
-|> AshXTDB.Temporal.for_all_system_time()
+|> AshXTDB.Query.for_all_system_time()
 |> Ash.read!()
 ```
 
@@ -180,8 +180,8 @@ Combine valid time and system time for full bitemporal queries:
 
 ```elixir
 MyApp.User
-|> AshXTDB.Temporal.as_of_valid_time(~U[2024-01-01 00:00:00Z])
-|> AshXTDB.Temporal.as_of_system_time(~U[2024-06-01 12:00:00Z])
+|> AshXTDB.Query.as_of_valid_time(~U[2024-01-01 00:00:00Z])
+|> AshXTDB.Query.as_of_system_time(~U[2024-06-01 12:00:00Z])
 |> Ash.read!()
 ```
 
@@ -193,13 +193,13 @@ Control the valid time range when creating or updating records:
 # Create a record valid from a specific date
 MyApp.User
 |> Ash.Changeset.for_create(:create, %{email: "bob@example.com", name: "Bob"})
-|> AshXTDB.Temporal.with_valid_from(~U[2024-06-01 00:00:00Z])
+|> AshXTDB.Changeset.with_valid_from(~U[2024-06-01 00:00:00Z])
 |> Ash.create!()
 
 # Create a record with a specific valid time range
 MyApp.User
 |> Ash.Changeset.for_create(:create, %{email: "temp@example.com", name: "Temp User"})
-|> AshXTDB.Temporal.with_valid_time(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
+|> AshXTDB.Changeset.with_valid_time(~U[2024-01-01 00:00:00Z], ~U[2024-12-31 23:59:59Z])
 |> Ash.create!()
 ```
 
@@ -208,7 +208,7 @@ MyApp.User
 Permanently remove a record from all history:
 
 ```elixir
-AshXTDB.Temporal.erase!(user)
+AshXTDB.Changeset.erase!(user)
 ```
 
 ## Pagination

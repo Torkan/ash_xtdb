@@ -112,7 +112,7 @@ defmodule MyHealth.Webhooks.PharmacyPartner do
   regardless of when we receive and process the webhook.
   """
 
-  alias AshXTDB.Temporal
+  alias AshXTDB.Query
 
   def handle_webhook(%{"event_type" => type, "payload" => payload, "event_timestamp" => ts}) do
     # Parse the actual event time from the webhook
@@ -225,7 +225,7 @@ defmodule MyHealth.XTDBSyncWorker do
 
   use Oban.Worker, queue: :xtdb_sync
 
-  alias AshXTDB.Query
+  alias AshXTDB.SQL
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"record" => record, "valid_from" => valid_from_iso}}) do
@@ -269,7 +269,7 @@ end
 
 ```elixir
 defmodule MyHealth.Prescriptions do
-  alias AshXTDB.Temporal
+  alias AshXTDB.Query
 
   @doc """
   Get the current state of a prescription (PostgreSQL - fast lookup).

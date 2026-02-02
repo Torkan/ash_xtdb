@@ -51,7 +51,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         arguments: [%Ash.Query.Ref{attribute: :value, relationship_path: []}]
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(expression, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(expression, state)
 
       assert sql == "ROUND(t.\"value\")"
     end
@@ -306,7 +306,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
       }
 
       # Call the internal function to verify SQL generation
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       assert sql =~ "ROUND("
       # Column names are quoted with double quotes
@@ -330,7 +330,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       assert sql =~ "MOD("
       # Column names are quoted with double quotes
@@ -349,7 +349,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       assert sql == "CURRENT_TIMESTAMP"
     end
@@ -366,7 +366,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       assert sql == "CURRENT_DATE"
     end
@@ -383,7 +383,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       assert sql =~ "CURRENT_TIMESTAMP"
       assert sql =~ "INTERVAL"
@@ -403,7 +403,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       assert sql =~ "CURRENT_TIMESTAMP"
       assert sql =~ "INTERVAL"
@@ -428,7 +428,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       # XTDB uses dot notation: (t."metadata").user.name
       # Column names are quoted with double quotes
@@ -452,7 +452,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       # XTDB uses: (t."metadata").items[0].value
       assert sql =~ "(t.\"metadata\").items[0].value"
@@ -702,7 +702,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       # Column names are quoted with double quotes
       assert sql == "(UPPER(t.\"name\"))"
@@ -729,7 +729,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, state} = AshXTDB.Query.Filter.expression_to_sql_for_test(filter_expr, state)
+      {sql, state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(filter_expr, state)
 
       # Column names are quoted with double quotes
       assert sql == "(t.\"name\" || ' ' || $1)"
@@ -763,7 +763,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(exists_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(exists_expr, state)
 
       # Should generate EXISTS subquery with join condition
       assert sql =~ "EXISTS"
@@ -794,7 +794,7 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         table_alias: "t"
       }
 
-      {sql, state} = AshXTDB.Query.Filter.expression_to_sql_for_test(exists_expr, state)
+      {sql, state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(exists_expr, state)
 
       # Should generate EXISTS subquery with filter condition
       assert sql =~ "EXISTS"

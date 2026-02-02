@@ -407,7 +407,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
         resource: AshXTDB.Test.User
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(exists_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(exists_expr, state)
 
       # Should generate EXISTS subquery
       assert sql =~ "EXISTS"
@@ -433,7 +433,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
         resource: AshXTDB.Test.Organization
       }
 
-      {sql, _state} = AshXTDB.Query.Filter.expression_to_sql_for_test(exists_expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(exists_expr, state)
 
       # Should generate nested EXISTS subqueries
       assert sql =~ "EXISTS"

@@ -5,7 +5,8 @@ defmodule AshXTDB.TemporalTest do
   use ExUnit.Case, async: false
 
   alias AshXTDB.Test.User
-  alias AshXTDB.Temporal
+  alias AshXTDB.Query
+  alias AshXTDB.Changeset
 
   require Ash.Query
 
@@ -30,7 +31,7 @@ defmodule AshXTDB.TemporalTest do
       # Query at current time should find the user
       users =
         User
-        |> Temporal.as_of_valid_time(DateTime.utc_now())
+        |> Query.as_of_valid_time(DateTime.utc_now())
         |> Ash.read!()
 
       assert length(users) == 1
@@ -51,7 +52,7 @@ defmodule AshXTDB.TemporalTest do
 
       users =
         User
-        |> Temporal.as_of_valid_time(past_time)
+        |> Query.as_of_valid_time(past_time)
         |> Ash.read!()
 
       assert users == []
@@ -76,7 +77,7 @@ defmodule AshXTDB.TemporalTest do
       # Query all valid time history
       users =
         User
-        |> Temporal.for_all_valid_time()
+        |> Query.for_all_valid_time()
         |> Ash.read!()
 
       # Should see all versions
@@ -100,7 +101,7 @@ defmodule AshXTDB.TemporalTest do
 
       users =
         User
-        |> Temporal.for_valid_time_between(from_time, to_time)
+        |> Query.for_valid_time_between(from_time, to_time)
         |> Ash.read!()
 
       assert length(users) >= 1
@@ -121,7 +122,7 @@ defmodule AshXTDB.TemporalTest do
       # Query at current time should find the user
       users =
         User
-        |> Temporal.as_of_system_time(DateTime.utc_now())
+        |> Query.as_of_system_time(DateTime.utc_now())
         |> Ash.read!()
 
       assert length(users) == 1
@@ -142,7 +143,7 @@ defmodule AshXTDB.TemporalTest do
 
       users =
         User
-        |> Temporal.as_of_system_time(past_time)
+        |> Query.as_of_system_time(past_time)
         |> Ash.read!()
 
       assert users == []
@@ -160,7 +161,7 @@ defmodule AshXTDB.TemporalTest do
       # Query all system time history (audit log)
       users =
         User
-        |> Temporal.for_all_system_time()
+        |> Query.for_all_system_time()
         |> Ash.read!()
 
       assert length(users) >= 1
@@ -182,8 +183,8 @@ defmodule AshXTDB.TemporalTest do
       # Query with both valid time and system time
       users =
         User
-        |> Temporal.as_of_valid_time(now)
-        |> Temporal.as_of_system_time(now)
+        |> Query.as_of_valid_time(now)
+        |> Query.as_of_system_time(now)
         |> Ash.read!()
 
       assert length(users) == 1
@@ -200,7 +201,7 @@ defmodule AshXTDB.TemporalTest do
           email: "valid_from@test.com",
           name: "Valid From User"
         })
-        |> Temporal.with_valid_from(past_time)
+        |> Changeset.with_valid_from(past_time)
         |> Ash.create!()
 
       assert user.email == "valid_from@test.com"
@@ -208,7 +209,7 @@ defmodule AshXTDB.TemporalTest do
       # User should be visible when querying at a time after valid_from
       users =
         User
-        |> Temporal.as_of_valid_time(DateTime.utc_now())
+        |> Query.as_of_valid_time(DateTime.utc_now())
         |> Ash.Query.filter(email == "valid_from@test.com")
         |> Ash.read!()
 
@@ -224,7 +225,7 @@ defmodule AshXTDB.TemporalTest do
           email: "valid_to@test.com",
           name: "Valid To User"
         })
-        |> Temporal.with_valid_to(future_time)
+        |> Changeset.with_valid_to(future_time)
         |> Ash.create!()
 
       assert user.email == "valid_to@test.com"
@@ -240,7 +241,7 @@ defmodule AshXTDB.TemporalTest do
           email: "valid_range@test.com",
           name: "Valid Range User"
         })
-        |> Temporal.with_valid_time(past_time, future_time)
+        |> Changeset.with_valid_time(past_time, future_time)
         |> Ash.create!()
 
       assert user.email == "valid_range@test.com"
@@ -263,7 +264,7 @@ defmodule AshXTDB.TemporalTest do
       assert length(users) == 1
 
       # Erase the user
-      assert :ok = Temporal.erase!(user)
+      assert :ok = Changeset.erase!(user)
 
       # User should be completely gone
       users = Ash.read!(User)
@@ -272,7 +273,7 @@ defmodule AshXTDB.TemporalTest do
       # User should also be gone from all history
       history_users =
         User
-        |> Temporal.for_all_valid_time()
+        |> Query.for_all_valid_time()
         |> Ash.read!()
 
       refute Enum.any?(history_users, fn u -> u.email == "erase@test.com" end)

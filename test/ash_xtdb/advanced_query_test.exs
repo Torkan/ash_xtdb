@@ -7,7 +7,7 @@ defmodule AshXTDB.AdvancedQueryTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Query
+  alias AshXTDB.SQL
   alias AshXTDB.Test.User
 
   @moduletag :integration
@@ -312,7 +312,7 @@ defmodule AshXTDB.AdvancedQueryTest do
 
   describe "Query module SQL generation" do
     test "generates window function SQL correctly" do
-      query = %Query{
+      query = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "users",
@@ -326,46 +326,46 @@ defmodule AshXTDB.AdvancedQueryTest do
         ]
       }
 
-      {sql, _params} = Query.to_sql(query, :select)
+      {sql, _params} = SQL.to_sql(query, :select)
 
       assert sql =~ "ROW_NUMBER() OVER (PARTITION BY t.organization_id ORDER BY t.age DESC)"
       assert sql =~ "AS \"row_num\""
     end
 
     test "generates CTE SQL correctly" do
-      inner_query = %Query{
+      inner_query = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "users"
       }
 
-      query = %Query{
+      query = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "active_users_cte",
         ctes: [%{name: "active_users_cte", query: inner_query}]
       }
 
-      {sql, _params} = Query.to_sql(query, :select)
+      {sql, _params} = SQL.to_sql(query, :select)
 
       assert sql =~ "WITH active_users_cte AS (SELECT"
     end
 
     test "generates UNION SQL correctly" do
-      query1 = %Query{
+      query1 = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "users"
       }
 
-      query2 = %Query{
+      query2 = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "archived_users"
       }
 
-      combined = Query.union(query1, query2)
-      {sql, _params} = Query.to_sql(combined, :select)
+      combined = SQL.union(query1, query2)
+      {sql, _params} = SQL.to_sql(combined, :select)
 
       assert sql =~ "FROM \"users\" t"
       assert sql =~ "UNION SELECT"
@@ -373,12 +373,12 @@ defmodule AshXTDB.AdvancedQueryTest do
 
     test "add_window_function helper works" do
       query =
-        %Query{
+        %SQL{
           resource: User,
           domain: AshXTDB.Test.Domain,
           table: "users"
         }
-        |> Query.add_window_function(%{
+        |> SQL.add_window_function(%{
           name: :row_num,
           function: :row_number,
           order_by: [{:age, :asc}]
@@ -392,19 +392,19 @@ defmodule AshXTDB.AdvancedQueryTest do
     end
 
     test "add_cte helper works" do
-      inner_query = %Query{
+      inner_query = %SQL{
         resource: User,
         domain: AshXTDB.Test.Domain,
         table: "users"
       }
 
       query =
-        %Query{
+        %SQL{
           resource: User,
           domain: AshXTDB.Test.Domain,
           table: "result"
         }
-        |> Query.add_cte("my_cte", inner_query)
+        |> SQL.add_cte("my_cte", inner_query)
 
       assert length(query.ctes) == 1
       [cte] = query.ctes

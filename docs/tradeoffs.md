@@ -134,7 +134,7 @@
 - Complete transaction history
 
 #### 3. **GDPR Compliance - ERASE**
-- `AshXTDB.Temporal.erase!(record)` permanently removes from ALL history
+- `AshXTDB.Changeset.erase!(record)` permanently removes from ALL history
 - True "right to be forgotten" compliance
 - Different from DELETE (which creates tombstone)
 - Irreversible by design

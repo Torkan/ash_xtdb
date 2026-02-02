@@ -112,7 +112,7 @@ defmodule AshXTDB.Connection do
   @impl DBConnection
   def handle_execute(%AshXTDB.SimpleQuery{statement: sql}, params, opts, state) do
     # Inline parameters since XTDB doesn't support parameterized queries
-    sql = AshXTDB.Query.inline_params(sql, params)
+    sql = AshXTDB.SQL.inline_params(sql, params)
     timeout = Keyword.get(opts, :timeout, 15_000)
 
     case do_simple_query(state, sql, timeout) do

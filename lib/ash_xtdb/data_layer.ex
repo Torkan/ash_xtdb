@@ -77,7 +77,7 @@ defmodule AshXTDB.DataLayer do
   - **Upsert Behavior**: XTDB INSERT acts as an upsert by default.
   - **No Constraints**: XTDB doesn't enforce database constraints. Use Ash validations.
   - **Schemaless**: No DDL migrations needed - tables are created automatically.
-  - **Temporal Data**: Use `AshXTDB.Temporal` for bitemporal queries.
+  - **Temporal Data**: Use `AshXTDB.Query` and `AshXTDB.Changeset` for bitemporal operations.
 
   ## Lateral Join Support
 
@@ -154,7 +154,7 @@ defmodule AshXTDB.DataLayer do
 
   alias AshXTDB.DataLayer.Info
   alias AshXTDB.NestedResult
-  alias AshXTDB.Query
+  alias AshXTDB.SQL
 
   # ============================================================================
   # Ash.DataLayer Callbacks
@@ -282,7 +282,7 @@ defmodule AshXTDB.DataLayer do
 
   @impl Ash.DataLayer
   def resource_to_query(resource, domain) do
-    %Query{
+    %SQL{
       resource: resource,
       domain: domain,
       table: Info.table!(resource)
@@ -311,7 +311,7 @@ defmodule AshXTDB.DataLayer do
   @impl Ash.DataLayer
   def run_query(query, resource, opts \\ []) do
     repo = Info.repo!(resource)
-    {sql, params} = Query.to_sql(query, :select)
+    {sql, params} = SQL.to_sql(query, :select)
 
     Logger.debug("AshXTDB SQL: #{sql} with params: #{inspect(params)}")
 
@@ -499,7 +499,7 @@ defmodule AshXTDB.DataLayer do
   @impl Ash.DataLayer
   def run_aggregate_query(query, aggregates, resource) do
     repo = Info.repo!(resource)
-    {sql, params} = Query.to_aggregate_sql(query, aggregates)
+    {sql, params} = SQL.to_aggregate_sql(query, aggregates)
 
     Logger.debug("AshXTDB Aggregate SQL: #{sql} with params: #{inspect(params)}")
 
@@ -713,7 +713,7 @@ defmodule AshXTDB.DataLayer do
       end
 
     # Build query with nested subquery
-    parent_query = %Query{
+    parent_query = %SQL{
       resource: source_resource,
       domain: query.domain,
       table: source_table,
@@ -722,7 +722,7 @@ defmodule AshXTDB.DataLayer do
       nested_subqueries: [nested_config]
     }
 
-    {sql, params} = Query.to_sql(parent_query, :select)
+    {sql, params} = SQL.to_sql(parent_query, :select)
 
     Logger.debug("AshXTDB NEST_#{String.upcase(to_string(nest_type))} SQL: #{sql}")
 
@@ -808,7 +808,7 @@ defmodule AshXTDB.DataLayer do
       end
 
     # Build query with nested subquery
-    parent_query = %Query{
+    parent_query = %SQL{
       resource: source_resource,
       domain: query.domain,
       table: source_table,
@@ -817,7 +817,7 @@ defmodule AshXTDB.DataLayer do
       nested_subqueries: [nested_config]
     }
 
-    {sql, params} = Query.to_sql(parent_query, :select)
+    {sql, params} = SQL.to_sql(parent_query, :select)
 
     Logger.debug("AshXTDB NEST_MANY (M2M) SQL: #{sql}")
 
@@ -1098,7 +1098,7 @@ defmodule AshXTDB.DataLayer do
 
     # Build record from changeset attributes
     record = build_record_from_changeset(changeset, resource)
-    {sql, params} = Query.build_insert(table, record, resource)
+    {sql, params} = SQL.build_insert(table, record, resource)
 
     Logger.debug("AshXTDB INSERT: #{sql} with params: #{inspect(params)}")
 
@@ -1129,7 +1129,7 @@ defmodule AshXTDB.DataLayer do
       # No changes, return existing record
       {:ok, changeset.data}
     else
-      {sql, params} = Query.build_update(table, pkey, changes, atomics, resource)
+      {sql, params} = SQL.build_update(table, pkey, changes, atomics, resource)
 
       Logger.debug("AshXTDB UPDATE: #{sql} with params: #{inspect(params)}")
 
@@ -1153,7 +1153,7 @@ defmodule AshXTDB.DataLayer do
     table = Info.table!(resource)
 
     pkey = primary_key_value(changeset.data, resource)
-    {sql, params} = Query.build_delete(table, pkey, resource)
+    {sql, params} = SQL.build_delete(table, pkey, resource)
 
     Logger.debug("AshXTDB DELETE: #{sql} with params: #{inspect(params)}")
 
@@ -1227,12 +1227,12 @@ defmodule AshXTDB.DataLayer do
         records = Enum.map(records_with_changesets, fn {record, _} -> record end)
 
         # Build batch INSERT SQL
-        {sql, params} = Query.build_bulk_insert(table, records, resource)
+        {sql, params} = SQL.build_bulk_insert(table, records, resource)
 
         Logger.debug("AshXTDB BULK INSERT: #{sql} with params: #{inspect(params)}")
 
         # XTDB requires inlined params for inserts
-        inlined_sql = AshXTDB.Query.inline_params(sql, params)
+        inlined_sql = AshXTDB.SQL.inline_params(sql, params)
 
         case repo.query(inlined_sql, []) do
           {:ok, _result} ->
@@ -1271,12 +1271,12 @@ defmodule AshXTDB.DataLayer do
       if return_records?, do: {:ok, []}, else: :ok
     else
       # Build UPDATE with WHERE from filter, including atomics
-      {sql, params} = Query.build_update_query(table, changes, atomics, query, resource)
+      {sql, params} = SQL.build_update_query(table, changes, atomics, query, resource)
 
       Logger.debug("AshXTDB UPDATE QUERY: #{sql} with params: #{inspect(params)}")
 
       # Inline params for XTDB
-      inlined_sql = AshXTDB.Query.inline_params(sql, params)
+      inlined_sql = AshXTDB.SQL.inline_params(sql, params)
 
       case repo.query(inlined_sql, []) do
         {:ok, _result} ->
@@ -1302,12 +1302,12 @@ defmodule AshXTDB.DataLayer do
     return_records? = Map.get(options, :return_records?, false)
 
     # Build DELETE with WHERE from filter
-    {sql, params} = Query.build_destroy_query(table, query, resource)
+    {sql, params} = SQL.build_destroy_query(table, query, resource)
 
     Logger.debug("AshXTDB DESTROY QUERY: #{sql} with params: #{inspect(params)}")
 
     # Inline params for XTDB
-    inlined_sql = AshXTDB.Query.inline_params(sql, params)
+    inlined_sql = AshXTDB.SQL.inline_params(sql, params)
 
     case repo.query(inlined_sql, []) do
       {:ok, _result} ->

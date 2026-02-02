@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2024 Torkild G. Kjevik
 # SPDX-License-Identifier: MIT
 
-defmodule AshXTDB.Query.Nested do
+defmodule AshXTDB.SQL.Nested do
   @moduledoc """
   Builds XTDB NEST_MANY and NEST_ONE subqueries for optimized relationship loading.
 
@@ -41,7 +41,7 @@ defmodule AshXTDB.Query.Nested do
       {select_sql, params} = Nested.build_nested_select(query, [nested])
   """
 
-  alias AshXTDB.Query.Filter
+  alias AshXTDB.SQL.Filter
 
   @parent_alias "t"
 
@@ -51,7 +51,7 @@ defmodule AshXTDB.Query.Nested do
   Returns {select_sql, params} where select_sql includes both regular columns
   and NEST_MANY/NEST_ONE subqueries.
   """
-  @spec build_nested_select(AshXTDB.Query.t(), list(map())) :: {String.t(), list()}
+  @spec build_nested_select(AshXTDB.SQL.t(), list(map())) :: {String.t(), list()}
   def build_nested_select(query, nested_subqueries) do
     # Build regular column selections
     regular_columns = build_regular_columns(query)
@@ -176,7 +176,7 @@ defmodule AshXTDB.Query.Nested do
     through_dest_col = format_column(through_alias, dest_attr_on_join)
     through_source_col = format_column(through_alias, source_attr_on_join)
 
-    quoted_through_table = AshXTDB.Query.quote_identifier(through_table)
+    quoted_through_table = AshXTDB.SQL.quote_identifier(through_table)
     subquery =
       "#{dest_col} IN (SELECT #{through_dest_col} FROM #{quoted_through_table} #{through_alias} WHERE #{through_source_col} = #{parent_col})"
 
@@ -273,7 +273,7 @@ defmodule AshXTDB.Query.Nested do
   defp format_column(table_alias, :_id), do: "#{table_alias}.\"_id\""
 
   defp format_column(table_alias, attr) when is_atom(attr) do
-    quoted_col = AshXTDB.Query.quote_identifier(Atom.to_string(attr))
+    quoted_col = AshXTDB.SQL.quote_identifier(Atom.to_string(attr))
     "#{table_alias}.#{quoted_col}"
   end
 

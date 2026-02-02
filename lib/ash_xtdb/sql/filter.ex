@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2024 Torkild G. Kjevik
 # SPDX-License-Identifier: MIT
 
-defmodule AshXTDB.Query.Filter do
+defmodule AshXTDB.SQL.Filter do
   @moduledoc """
   Translates Ash filters to SQL WHERE clauses.
 
@@ -562,7 +562,7 @@ defmodule AshXTDB.Query.Filter do
   defp quote_table(table) when is_binary(table), do: quote_identifier(table)
 
   defp quote_identifier(name) do
-    AshXTDB.Query.quote_identifier(name)
+    AshXTDB.SQL.quote_identifier(name)
   end
 
   # ============================================================================
@@ -1392,7 +1392,7 @@ defmodule AshXTDB.Query.Filter do
   defp column_name(:_id, alias), do: "#{alias}.\"_id\""
 
   defp column_name(name, alias) do
-    quoted_col = AshXTDB.Query.quote_identifier(Atom.to_string(name))
+    quoted_col = AshXTDB.SQL.quote_identifier(Atom.to_string(name))
     "#{alias}.#{quoted_col}"
   end
 end

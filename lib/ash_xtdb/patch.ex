@@ -42,7 +42,7 @@ defmodule AshXTDB.Patch do
   """
 
   alias AshXTDB.DataLayer.Info
-  alias AshXTDB.Query
+  alias AshXTDB.SQL
 
   @type patch_option ::
           {:resource, Ash.Resource.t()}
@@ -122,7 +122,7 @@ defmodule AshXTDB.Patch do
   def build_patch_sql(table, records, valid_from, valid_to) do
     records_clause = build_records_clause(records)
     valid_time_clause = build_valid_time_clause(valid_from, valid_to)
-    quoted_table = AshXTDB.Query.quote_identifier(table)
+    quoted_table = AshXTDB.SQL.quote_identifier(table)
 
     if valid_time_clause do
       "PATCH INTO #{quoted_table} #{valid_time_clause} RECORDS #{records_clause}"
@@ -173,7 +173,7 @@ defmodule AshXTDB.Patch do
 
   # Format a value for XTDB SQL
   defp format_value(nil), do: "NULL"
-  defp format_value(value) when is_binary(value), do: Query.escape_value(value)
+  defp format_value(value) when is_binary(value), do: SQL.escape_value(value)
   defp format_value(value) when is_integer(value), do: Integer.to_string(value)
   defp format_value(value) when is_float(value), do: Float.to_string(value)
   defp format_value(true), do: "true"
@@ -188,8 +188,8 @@ defmodule AshXTDB.Patch do
   end
 
   defp format_value(value) do
-    # Fallback: use Query.escape_value for complex types
-    Query.escape_value(value)
+    # Fallback: use SQL.escape_value for complex types
+    SQL.escape_value(value)
   end
 
   # Build the FOR PORTION OF VALID_TIME clause

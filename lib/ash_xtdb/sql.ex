@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2024 Torkild G. Kjevik
 # SPDX-License-Identifier: MIT
 
-defmodule AshXTDB.Query do
+defmodule AshXTDB.SQL do
   @moduledoc """
   Represents an XTDB query and provides SQL generation.
 
@@ -12,8 +12,8 @@ defmodule AshXTDB.Query do
   - SELECT * doesn't work, must specify columns explicitly
   """
 
-  alias AshXTDB.Query.Filter
-  alias AshXTDB.Query.Nested
+  alias AshXTDB.SQL.Filter
+  alias AshXTDB.SQL.Nested
 
   defstruct [
     :resource,
@@ -308,7 +308,7 @@ defmodule AshXTDB.Query do
   ## Examples
 
       query
-      |> AshXTDB.Query.add_window_function(%{
+      |> AshXTDB.SQL.add_window_function(%{
         name: :row_num,
         function: :row_number,
         partition_by: [:organization_id],
@@ -316,7 +316,7 @@ defmodule AshXTDB.Query do
       })
 
       query
-      |> AshXTDB.Query.add_window_function(%{
+      |> AshXTDB.SQL.add_window_function(%{
         name: :running_total,
         function: :sum,
         field: :amount,
@@ -335,9 +335,9 @@ defmodule AshXTDB.Query do
 
   ## Examples
 
-      subquery = %AshXTDB.Query{...}
+      subquery = %AshXTDB.SQL{...}
       query
-      |> AshXTDB.Query.add_cte("active_users", subquery)
+      |> AshXTDB.SQL.add_cte("active_users", subquery)
   """
   @spec add_cte(t(), String.t(), t()) :: t()
   def add_cte(%__MODULE__{} = query, name, cte_query) do
@@ -1569,10 +1569,10 @@ defmodule AshXTDB.Query do
 
   ## Examples
 
-      iex> AshXTDB.Query.quote_identifier("users")
+      iex> AshXTDB.SQL.quote_identifier("users")
       "\"users\""
 
-      iex> AshXTDB.Query.quote_identifier("user\"table")
+      iex> AshXTDB.SQL.quote_identifier("user\"table")
       "\"user\"\"table\""
   """
   @spec quote_identifier(String.t() | atom()) :: String.t()

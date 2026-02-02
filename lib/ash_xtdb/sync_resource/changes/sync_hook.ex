@@ -123,7 +123,7 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
   # Default Direct Sync
   # ============================================================================
 
-  defp default_sync(history_resource, :destroy, data, _context) do
+  defp default_sync(history_resource, :destroy, data, context) do
     # For destroy, delete the record from XTDB
     # This sets _valid_to to now, preserving history
     pkey_fields = Ash.Resource.Info.primary_key(history_resource)
@@ -134,9 +134,19 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
         {field, Map.get(data, field)}
       end)
 
+    # Build options from context (tenant, actor)
+    opts =
+      [return_errors?: true]
+      |> then(fn opts ->
+        if context.tenant, do: Keyword.put(opts, :tenant, context.tenant), else: opts
+      end)
+      |> then(fn opts ->
+        if context.actor, do: Keyword.put(opts, :actor, context.actor), else: opts
+      end)
+
     case history_resource
          |> Ash.Query.filter(^pkey_filter)
-         |> Ash.bulk_destroy(:delete_sync, %{}, return_errors?: true) do
+         |> Ash.bulk_destroy(:delete_sync, %{}, opts) do
       %Ash.BulkResult{status: :success} ->
         :ok
 
@@ -146,14 +156,24 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
     end
   end
 
-  defp default_sync(history_resource, _action_type, record, _context) do
+  defp default_sync(history_resource, _action_type, record, context) do
     # For create/update, upsert the record using the :sync action
     # Extract attribute values from the source record
     attrs = extract_syncable_attributes(record, history_resource)
 
+    # Build options from context (tenant, actor)
+    opts =
+      []
+      |> then(fn opts ->
+        if context.tenant, do: Keyword.put(opts, :tenant, context.tenant), else: opts
+      end)
+      |> then(fn opts ->
+        if context.actor, do: Keyword.put(opts, :actor, context.actor), else: opts
+      end)
+
     case history_resource
-         |> Ash.Changeset.for_create(:sync, attrs)
-         |> Ash.create() do
+         |> Ash.Changeset.for_create(:sync, attrs, opts)
+         |> Ash.create(opts) do
       {:ok, _} ->
         :ok
 

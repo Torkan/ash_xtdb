@@ -18,9 +18,6 @@ defmodule Mix.Tasks.AshXtdb.Drop do
       # Drop the database configured in your repo
       mix ash_xtdb.drop
 
-      # Drop without confirmation
-      mix ash_xtdb.drop --yes
-
       # Drop and wipe storage
       mix ash_xtdb.drop --wipe
 
@@ -34,7 +31,6 @@ defmodule Mix.Tasks.AshXtdb.Drop do
     * `--port` - Override XTDB port
     * `--wipe` - Also delete the database storage (requires Docker)
     * `--container` - Docker container name (default: xtdb)
-    * `--yes` or `-y` - Skip confirmation prompt
     * `--quiet` - Suppress output
 
   ## Notes
@@ -72,10 +68,8 @@ defmodule Mix.Tasks.AshXtdb.Drop do
           repo: :string,
           wipe: :boolean,
           container: :string,
-          yes: :boolean,
           quiet: :boolean
-        ],
-        aliases: [y: :yes]
+        ]
       )
 
     repo = Helpers.parse_repo(opts)
@@ -97,15 +91,6 @@ defmodule Mix.Tasks.AshXtdb.Drop do
 
     quiet = Keyword.get(opts, :quiet, false)
     wipe = Keyword.get(opts, :wipe, false)
-    skip_confirm = Keyword.get(opts, :yes, false)
-
-    action = if wipe, do: "detach and permanently delete", else: "detach"
-
-    unless skip_confirm do
-      unless Mix.shell().yes?("This will #{action} database '#{database_name}'. Continue?") do
-        Mix.raise("Aborted.")
-      end
-    end
 
     conn_opts = Helpers.connection_opts(repo, opts)
     conn_opts = Keyword.put(conn_opts, :database, "xtdb")

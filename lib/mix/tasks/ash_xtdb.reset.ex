@@ -18,9 +18,6 @@ defmodule Mix.Tasks.AshXtdb.Reset do
       # Reset the database configured in your repo
       mix ash_xtdb.reset
 
-      # Reset without confirmation
-      mix ash_xtdb.reset --yes
-
       # Reset a specific database
       mix ash_xtdb.reset my_project
 
@@ -30,7 +27,6 @@ defmodule Mix.Tasks.AshXtdb.Reset do
     * `--hostname` - Override XTDB hostname
     * `--port` - Override XTDB port
     * `--container` - Docker container name (default: xtdb)
-    * `--yes` or `-y` - Skip confirmation prompt
     * `--quiet` - Suppress output
 
   ## Warning
@@ -65,10 +61,8 @@ defmodule Mix.Tasks.AshXtdb.Reset do
           port: :integer,
           repo: :string,
           container: :string,
-          yes: :boolean,
           quiet: :boolean
-        ],
-        aliases: [y: :yes]
+        ]
       )
 
     repo = Helpers.parse_repo(opts)
@@ -89,15 +83,6 @@ defmodule Mix.Tasks.AshXtdb.Reset do
     end
 
     quiet = Keyword.get(opts, :quiet, false)
-    skip_confirm = Keyword.get(opts, :yes, false)
-
-    unless skip_confirm do
-      unless Mix.shell().yes?(
-               "This will permanently delete all data in '#{database_name}'. Continue?"
-             ) do
-        Mix.raise("Aborted.")
-      end
-    end
 
     conn_opts = Helpers.connection_opts(repo, opts)
     conn_opts = Keyword.put(conn_opts, :database, "xtdb")

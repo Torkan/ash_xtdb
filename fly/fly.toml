@@ -21,6 +21,16 @@ primary_region = 'fra'
   auto_extend_size_increment = '1GB'
   auto_extend_size_limit = '50GB'
 
+[[services]]
+  internal_port = 5432
+  protocol = 'tcp'
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 5432
+
 [[vm]]
   size = 'shared-cpu-2x'
   memory = '2gb'

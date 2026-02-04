@@ -77,6 +77,9 @@ defmodule Mix.Tasks.AshXtdb.Setup do
           Mix.raise("Too many arguments. Usage: mix ash_xtdb.setup [DATABASE_NAME]")
       end
 
+    # Validate database name to prevent SQL injection
+    Helpers.validate_database_name!(database_name)
+
     setup_database(database_name, repo, opts)
   end
 

@@ -79,6 +79,9 @@ defmodule Mix.Tasks.AshXtdb.Reset do
           Mix.raise("Too many arguments. Usage: mix ash_xtdb.reset [DATABASE_NAME]")
       end
 
+    # Validate database name to prevent SQL injection and path traversal
+    Helpers.validate_database_name!(database_name)
+
     reset_database(database_name, repo, opts)
   end
 

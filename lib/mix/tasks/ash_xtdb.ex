@@ -106,6 +106,41 @@ defmodule Mix.Tasks.AshXtdb do
   end
 
   @doc """
+  Validates a database name to prevent SQL injection and path traversal.
+
+  Database names must:
+  - Start with a letter or underscore
+  - Contain only alphanumeric characters and underscores
+  - Not be the reserved "xtdb" database (checked separately in tasks)
+
+  Raises Mix.Error if the name is invalid.
+
+  ## Examples
+
+      iex> validate_database_name!("my_app_dev")
+      "my_app_dev"
+
+      iex> validate_database_name!("foo; DROP DATABASE xtdb; --")
+      ** (Mix.Error) Invalid database name...
+  """
+  def validate_database_name!(name) when is_binary(name) do
+    if Regex.match?(~r/^[a-zA-Z_][a-zA-Z0-9_]*$/, name) do
+      name
+    else
+      Mix.raise("""
+      Invalid database name: #{inspect(name)}
+
+      Database names must start with a letter or underscore and contain
+      only alphanumeric characters and underscores (a-z, A-Z, 0-9, _).
+      """)
+    end
+  end
+
+  def validate_database_name!(name) do
+    Mix.raise("Database name must be a string, got: #{inspect(name)}")
+  end
+
+  @doc """
   Starts a single connection (not pooled) for mix tasks.
   """
   def start_connection(opts) do

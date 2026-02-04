@@ -18,8 +18,8 @@ defmodule AshXTDB.TemporalAttributesTest do
     xtdb do
       repo AshXTDB.TestRepo
       table "public_temporal"
-      valid_from_public? true
-      valid_to_public? true
+      valid_from_public?(true)
+      valid_to_public?(true)
     end
 
     attributes do

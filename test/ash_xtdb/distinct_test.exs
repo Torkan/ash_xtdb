@@ -14,7 +14,6 @@ defmodule AshXTDB.DistinctTest do
   use ExUnit.Case, async: false
 
   alias AshXTDB.Test.User
-  alias AshXTDB.Test.Post
 
   require Ash.Query
 

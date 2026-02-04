@@ -22,7 +22,17 @@ defmodule AshXTDB.UltimateStressTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.{Organization, User, Post, Comment, Category, Project, UserProject, Tag, PostTag}
+  alias AshXTDB.Test.{
+    Organization,
+    User,
+    Post,
+    Comment,
+    Category,
+    Project,
+    UserProject,
+    Tag,
+    PostTag
+  }
 
   require Ash.Query
   require Ash.Expr
@@ -34,13 +44,22 @@ defmodule AshXTDB.UltimateStressTest do
     # Clean up all tables in dependency order
     AshXTDB.TestRepo.query("DELETE FROM comments WHERE comments.\"_id\" IS NOT NULL", [])
     AshXTDB.TestRepo.query("DELETE FROM post_tags WHERE post_tags.\"_id\" IS NOT NULL", [])
-    AshXTDB.TestRepo.query("DELETE FROM user_projects WHERE user_projects.\"_id\" IS NOT NULL", [])
+
+    AshXTDB.TestRepo.query(
+      "DELETE FROM user_projects WHERE user_projects.\"_id\" IS NOT NULL",
+      []
+    )
+
     AshXTDB.TestRepo.query("DELETE FROM posts WHERE posts.\"_id\" IS NOT NULL", [])
     AshXTDB.TestRepo.query("DELETE FROM tags WHERE tags.\"_id\" IS NOT NULL", [])
     AshXTDB.TestRepo.query("DELETE FROM categories WHERE categories.\"_id\" IS NOT NULL", [])
     AshXTDB.TestRepo.query("DELETE FROM projects WHERE projects.\"_id\" IS NOT NULL", [])
     AshXTDB.TestRepo.query("DELETE FROM users WHERE users.\"_id\" IS NOT NULL", [])
-    AshXTDB.TestRepo.query("DELETE FROM organizations WHERE organizations.\"_id\" IS NOT NULL", [])
+
+    AshXTDB.TestRepo.query(
+      "DELETE FROM organizations WHERE organizations.\"_id\" IS NOT NULL",
+      []
+    )
 
     # Create complex test data hierarchy
     orgs = create_test_organizations()
@@ -54,14 +73,13 @@ defmodule AshXTDB.UltimateStressTest do
     _user_projects = create_test_user_projects(users, projects)
 
     {:ok,
-      orgs: orgs,
-      users: users,
-      posts: posts,
-      categories: categories,
-      tags: tags,
-      comments: comments,
-      projects: projects
-    }
+     orgs: orgs,
+     users: users,
+     posts: posts,
+     categories: categories,
+     tags: tags,
+     comments: comments,
+     projects: projects}
   end
 
   defp create_test_organizations do
@@ -116,7 +134,8 @@ defmodule AshXTDB.UltimateStressTest do
 
   defp create_test_categories do
     # Create hierarchical categories
-    tech = Category
+    tech =
+      Category
       |> Ash.Changeset.for_create(:create, %{
         name: "Technology",
         slug: "tech",
@@ -126,7 +145,8 @@ defmodule AshXTDB.UltimateStressTest do
       })
       |> Ash.create!()
 
-    programming = Category
+    programming =
+      Category
       |> Ash.Changeset.for_create(:create, %{
         name: "Programming",
         slug: "programming",
@@ -137,7 +157,8 @@ defmodule AshXTDB.UltimateStressTest do
       })
       |> Ash.create!()
 
-    lifestyle = Category
+    lifestyle =
+      Category
       |> Ash.Changeset.for_create(:create, %{
         name: "Lifestyle",
         slug: "lifestyle",
@@ -146,7 +167,8 @@ defmodule AshXTDB.UltimateStressTest do
       })
       |> Ash.create!()
 
-    archived = Category
+    archived =
+      Category
       |> Ash.Changeset.for_create(:create, %{
         name: "Archived",
         slug: "archived",
@@ -165,7 +187,8 @@ defmodule AshXTDB.UltimateStressTest do
     users
     |> Enum.with_index()
     |> Enum.flat_map(fn {user, idx} ->
-      post_count = rem(idx, 5) + 1  # 1-5 posts per user
+      # 1-5 posts per user
+      post_count = rem(idx, 5) + 1
 
       for i <- 1..post_count do
         # Assign categories cyclically
@@ -229,7 +252,8 @@ defmodule AshXTDB.UltimateStressTest do
     posts
     |> Enum.with_index()
     |> Enum.flat_map(fn {post, idx} ->
-      comment_count = rem(idx, 4)  # 0-3 comments per post
+      # 0-3 comments per post
+      comment_count = rem(idx, 4)
 
       if comment_count > 0 do
         for i <- 1..comment_count do
@@ -336,7 +360,7 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           (exists(posts, true) and active == true) or
-          exists(organization, active == true)
+            exists(organization, active == true)
         )
         |> Ash.Query.distinct(:organization_id)
         |> Ash.Query.sort(post_count: :desc, name: :asc)
@@ -353,9 +377,7 @@ defmodule AshXTDB.UltimateStressTest do
       # starts with a specific letter AND those users have posts
       results =
         Organization
-        |> Ash.Query.filter(
-          exists(users, name_length > 3 and exists(posts, true))
-        )
+        |> Ash.Query.filter(exists(users, name_length > 3 and exists(posts, true)))
         |> Ash.read!()
 
       # All our test users have names longer than 3 chars
@@ -373,11 +395,12 @@ defmodule AshXTDB.UltimateStressTest do
         Organization
         |> Ash.Query.filter(
           active == true and
-          exists(users,
-            active == true and
-            age >= 25 and
-            exists(posts, not is_nil(body))
-          )
+            exists(
+              users,
+              active == true and
+                age >= 25 and
+                exists(posts, not is_nil(body))
+            )
         )
         |> Ash.read!()
 
@@ -397,7 +420,8 @@ defmodule AshXTDB.UltimateStressTest do
 
       # Verify ordering - users with shorter names first
       # and within same name length, more posts first
-      assert length(results) == 9  # All users
+      # All users
+      assert length(results) == 9
     end
 
     test "filter by calculation, sort by aggregate, distinct by org", _ctx do
@@ -437,16 +461,11 @@ defmodule AshXTDB.UltimateStressTest do
       results =
         User
         |> Ash.Query.filter(
-          (
-            (active == true and age >= 25) or
-            (active == false and age < 25)
-          ) and (
-            not (name == "NonExistent") and
-            (
-              exists(posts, true) or
-              exists(organization, active == true)
-            )
-          )
+          ((active == true and age >= 25) or
+             (active == false and age < 25)) and
+            (not (name == "NonExistent") and
+               (exists(posts, true) or
+                  exists(organization, active == true)))
         )
         |> Ash.Query.sort(name: :asc)
         |> Ash.read!()
@@ -473,7 +492,7 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           not exists(posts, not is_nil(body)) and
-          name_length >= 4
+            name_length >= 4
         )
         |> Ash.Query.sort(age: :desc)
         |> Ash.read!()
@@ -499,11 +518,11 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           # Boolean logic
-          (active == true or age >= 40) and
           # Calculation-like filter
-          age >= 18 and age < 65 and
           # Exists with filter
-          exists(organization, active == true)
+          (active == true or age >= 40) and
+            age >= 18 and age < 65 and
+            exists(organization, active == true)
         )
         |> Ash.Query.distinct(:organization_id)
         |> Ash.Query.sort(post_count: :desc, name_length: :asc)
@@ -513,11 +532,12 @@ defmodule AshXTDB.UltimateStressTest do
 
       # Should work without error and return reasonable results
       assert length(results) <= 2
+
       assert Enum.all?(results, fn u ->
-        # Note: active may come back as "t"/"f" strings from XTDB
-        (u.active in [true, "t"] or u.age >= 40) and
-        u.age >= 18 and u.age < 65
-      end)
+               # Note: active may come back as "t"/"f" strings from XTDB
+               (u.active in [true, "t"] or u.age >= 40) and
+                 u.age >= 18 and u.age < 65
+             end)
     end
 
     test "the mega query with all filter types", _ctx do
@@ -534,22 +554,22 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           # Comparison operators
-          age > 20 and
-          age <= 60 and
-          age != 42 and
           # Boolean
-          (active == true or active == false) and
           # NULL checks
-          not is_nil(name) and
           # Exists
-          exists(posts, true)
+          age > 20 and
+            age <= 60 and
+            age != 42 and
+            (active == true or active == false) and
+            not is_nil(name) and
+            exists(posts, true)
         )
         |> Ash.Query.sort(post_count: :desc)
         |> Ash.read!()
 
       assert Enum.all?(results, fn u ->
-        u.age > 20 and u.age <= 60 and u.age != 42 and not is_nil(u.name)
-      end)
+               u.age > 20 and u.age <= 60 and u.age != 42 and not is_nil(u.name)
+             end)
     end
   end
 
@@ -561,9 +581,10 @@ defmodule AshXTDB.UltimateStressTest do
       {:ok, _updated} =
         user
         |> Ash.Changeset.for_update(:update)
-        |> Ash.Changeset.atomic_update(:age, Ash.Expr.expr(
-          if(age >= 30, do: age + 5, else: age + 10)
-        ))
+        |> Ash.Changeset.atomic_update(
+          :age,
+          Ash.Expr.expr(if(age >= 30, do: age + 5, else: age + 10))
+        )
         |> Ash.update()
 
       [reloaded] =
@@ -577,7 +598,8 @@ defmodule AshXTDB.UltimateStressTest do
     end
 
     test "multiple atomic updates in sequence", ctx do
-      user = Enum.find(ctx.users, & &1.name == "Dave")  # Age 45
+      # Age 45
+      user = Enum.find(ctx.users, &(&1.name == "Dave"))
 
       # First atomic: multiply by 2
       {:ok, _} =
@@ -615,7 +637,7 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           exists(organization, active == true) and
-          (age >= 25 or exists(posts, not is_nil(body)))
+            (age >= 25 or exists(posts, not is_nil(body)))
         )
         |> Ash.Query.distinct(:name)
         |> Ash.Query.sort(post_count: :desc, age: :asc)
@@ -648,7 +670,7 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           age > 1000 and
-          exists(posts, title == "nonexistent_title_xyz")
+            exists(posts, title == "nonexistent_title_xyz")
         )
         |> Ash.Query.distinct(:name)
         |> Ash.Query.sort(post_count: :desc)
@@ -662,13 +684,15 @@ defmodule AshXTDB.UltimateStressTest do
       results =
         User
         |> Ash.Query.filter(
+          # Always true
           (true or false) and
-          (age >= 0 or age < 0 or is_nil(age)) and
-          not (age > 1000 and age < 0)  # Always true
+            (age >= 0 or age < 0 or is_nil(age)) and
+            not (age > 1000 and age < 0)
         )
         |> Ash.read!()
 
-      assert length(results) == 9  # All users
+      # All users
+      assert length(results) == 9
     end
 
     test "single result with maximum constraints", _ctx do
@@ -713,9 +737,7 @@ defmodule AshXTDB.UltimateStressTest do
       # Users whose organization is active and has employees
       results =
         User
-        |> Ash.Query.filter(
-          exists(organization, active == true and employee_count > 0)
-        )
+        |> Ash.Query.filter(exists(organization, active == true and employee_count > 0))
         |> Ash.Query.sort(age: :desc)
         |> Ash.read!()
 
@@ -728,12 +750,13 @@ defmodule AshXTDB.UltimateStressTest do
         Organization
         |> Ash.Query.filter(
           active == true and
-          employee_count > 0 and
-          exists(users,
-            active == true and
-            age >= 20 and
-            exists(posts, not is_nil(body) and not is_nil(title))
-          )
+            employee_count > 0 and
+            exists(
+              users,
+              active == true and
+                age >= 20 and
+                exists(posts, not is_nil(body) and not is_nil(title))
+            )
         )
         |> Ash.Query.sort(user_count: :desc)
         |> Ash.read!()
@@ -767,7 +790,7 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           exists(organization, active == true and employee_count > 0) and
-          active == true
+            active == true
         )
         |> Ash.Query.sort(post_count: :desc, name: :asc)
         |> Ash.read!()
@@ -785,12 +808,13 @@ defmodule AshXTDB.UltimateStressTest do
       results =
         User
         |> Ash.Query.filter(
-          (active == true and age >= 18 and age < 65) and
-          exists(organization,
-            active == true and
-            employee_count > 10
-          ) and
-          exists(posts, not is_nil(title))
+          active == true and age >= 18 and age < 65 and
+            exists(
+              organization,
+              active == true and
+                employee_count > 10
+            ) and
+            exists(posts, not is_nil(title))
         )
         |> Ash.Query.distinct(:organization_id)
         |> Ash.Query.sort(post_count: :desc, name_length: :asc)
@@ -810,12 +834,10 @@ defmodule AshXTDB.UltimateStressTest do
         try do
           User
           |> Ash.Query.filter(
-            (active == true and age >= 18 and age < 65) and
-            (
-              exists(organization, active == true and name != "") or
-              exists(posts, not is_nil(title))
-            ) and
-            not (age == 999)
+            active == true and age >= 18 and age < 65 and
+              (exists(organization, active == true and name != "") or
+                 exists(posts, not is_nil(title))) and
+              not (age == 999)
           )
           |> Ash.Query.distinct(:organization_id)
           |> Ash.Query.sort(post_count: :desc, name_length: :asc, age: :desc)
@@ -852,13 +874,15 @@ defmodule AshXTDB.UltimateStressTest do
         Organization
         |> Ash.Query.filter(
           active == true and
-          exists(users,
-            active == true and
-            exists(posts,
-              published == true and
-              exists(comments, approved == true)
+            exists(
+              users,
+              active == true and
+                exists(
+                  posts,
+                  published == true and
+                    exists(comments, approved == true)
+                )
             )
-          )
         )
         |> Ash.Query.sort(user_count: :desc, name: :asc)
         |> Ash.read!()
@@ -890,9 +914,10 @@ defmodule AshXTDB.UltimateStressTest do
       results =
         User
         |> Ash.Query.filter(
-          exists(posts,
+          exists(
+            posts,
             view_count > 0 and
-            exists(comments, likes >= 5 and approved == true)
+              exists(comments, likes >= 5 and approved == true)
           )
         )
         |> Ash.Query.sort(post_count: :desc, age: :asc)
@@ -923,8 +948,8 @@ defmodule AshXTDB.UltimateStressTest do
         Post
         |> Ash.Query.filter(
           published == true and
-          exists(comments, approved == true and likes > 0) and
-          exists(user, active == true)
+            exists(comments, approved == true and likes > 0) and
+            exists(user, active == true)
         )
         |> Ash.Query.sort(comment_count: :desc, view_count: :desc)
         |> Ash.read!()
@@ -956,10 +981,11 @@ defmodule AshXTDB.UltimateStressTest do
         Category
         |> Ash.Query.filter(
           active == true and
-          exists(posts,
-            published == true and
-            exists(user, active == true and age >= 18)
-          )
+            exists(
+              posts,
+              published == true and
+                exists(user, active == true and age >= 18)
+            )
         )
         |> Ash.Query.sort(post_count: :desc, priority: :desc)
         |> Ash.read!()
@@ -982,9 +1008,11 @@ defmodule AshXTDB.UltimateStressTest do
       results =
         Category
         |> Ash.Query.filter(
-          is_nil(parent_id) and  # Root categories
-          priority >= 50 and
-          exists(posts, true)  # Has at least one post
+          # Root categories
+          # Has at least one post
+          is_nil(parent_id) and
+            priority >= 50 and
+            exists(posts, true)
         )
         |> Ash.Query.distinct(:slug)
         |> Ash.Query.sort(priority: :desc)
@@ -1004,18 +1032,19 @@ defmodule AshXTDB.UltimateStressTest do
         Post
         |> Ash.Query.filter(
           published == true and
-          not is_nil(category_id) and
-          exists(category, priority >= 50 and active == true) and
-          exists(comments, approved == true)
+            not is_nil(category_id) and
+            exists(category, priority >= 50 and active == true) and
+            exists(comments, approved == true)
         )
         |> Ash.Query.sort(comment_count: :desc, view_count: :desc)
         |> Ash.read!()
 
       # All results should be published, have a category, and have approved comments
       assert length(results) >= 1
+
       assert Enum.all?(results, fn post ->
-        post.published in [true, "t"] and post.category_id != nil
-      end)
+               post.published in [true, "t"] and post.category_id != nil
+             end)
     end
   end
 
@@ -1036,10 +1065,11 @@ defmodule AshXTDB.UltimateStressTest do
         Organization
         |> Ash.Query.filter(
           active == true and
-          exists(projects,
-            active == true and
-            status == "active"
-          )
+            exists(
+              projects,
+              active == true and
+                status == "active"
+            )
         )
         |> Ash.Query.sort(project_count: :desc, user_count: :desc, name: :asc)
         |> Ash.read!()
@@ -1054,9 +1084,9 @@ defmodule AshXTDB.UltimateStressTest do
         Project
         |> Ash.Query.filter(
           active == true and
-          budget > 100_000 and
-          member_count >= 1 and
-          exists(organization, active == true)
+            budget > 100_000 and
+            member_count >= 1 and
+            exists(organization, active == true)
         )
         |> Ash.Query.distinct(:status)
         |> Ash.Query.sort(member_count: :desc, budget: :desc)
@@ -1074,11 +1104,12 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           active == true and
-          project_count >= 1 and
-          exists(user_projects,
-            active == true and
-            hours_allocated >= 16
-          )
+            project_count >= 1 and
+            exists(
+              user_projects,
+              active == true and
+                hours_allocated >= 16
+            )
         )
         |> Ash.Query.sort(project_count: :desc, post_count: :desc)
         |> Ash.read!()
@@ -1131,17 +1162,19 @@ defmodule AshXTDB.UltimateStressTest do
         Organization
         |> Ash.Query.filter(
           active == true and
-          employee_count > 0 and
-          exists(projects, active == true and budget > 50_000) and
-          exists(users,
-            active == true and
-            age >= 18 and
-            exists(posts,
-              published == true and
-              exists(category, active == true and priority > 0) and
-              exists(comments, approved == true)
+            employee_count > 0 and
+            exists(projects, active == true and budget > 50_000) and
+            exists(
+              users,
+              active == true and
+                age >= 18 and
+                exists(
+                  posts,
+                  published == true and
+                    exists(category, active == true and priority > 0) and
+                    exists(comments, approved == true)
+                )
             )
-          )
         )
         |> Ash.Query.distinct(:industry)
         |> Ash.Query.sort(project_count: :desc, user_count: :desc)
@@ -1152,8 +1185,8 @@ defmodule AshXTDB.UltimateStressTest do
       assert length(results) <= 5
       # All returned orgs should be active with employees
       assert Enum.all?(results, fn org ->
-        org.active in [true, "t"] and org.employee_count > 0
-      end)
+               org.active in [true, "t"] and org.employee_count > 0
+             end)
     end
 
     test "users: cross-cutting through projects AND posts AND comments", _ctx do
@@ -1165,14 +1198,15 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           active == true and
-          age >= 18 and age < 65 and
-          exists(organization, active == true and project_count >= 1) and
-          exists(posts,
-            published == true and
-            view_count > 0 and
-            exists(comments, approved == true or likes > 5)
-          ) and
-          exists(user_projects, active == true and hours_allocated > 0)
+            age >= 18 and age < 65 and
+            exists(organization, active == true and project_count >= 1) and
+            exists(
+              posts,
+              published == true and
+                view_count > 0 and
+                exists(comments, approved == true or likes > 5)
+            ) and
+            exists(user_projects, active == true and hours_allocated > 0)
         )
         |> Ash.Query.distinct(:organization_id)
         |> Ash.Query.sort(post_count: :desc, project_count: :desc, name_length: :asc)
@@ -1183,8 +1217,8 @@ defmodule AshXTDB.UltimateStressTest do
       assert length(results) <= 10
       # All returned users should be active adults
       assert Enum.all?(results, fn u ->
-        u.active in [true, "t"] and u.age >= 18 and u.age < 65
-      end)
+               u.active in [true, "t"] and u.age >= 18 and u.age < 65
+             end)
     end
 
     test "posts: maximum relationship traversal", _ctx do
@@ -1197,14 +1231,16 @@ defmodule AshXTDB.UltimateStressTest do
         Post
         |> Ash.Query.filter(
           published == true and
-          view_count > 0 and
-          not is_nil(body) and
-          exists(user, active == true and age >= 18 and
-            exists(organization, active == true and employee_count > 0)
-          ) and
-          exists(tags, priority >= 50) and
-          exists(category, active == true) and
-          exists(comments, approved == true and likes >= 1)
+            view_count > 0 and
+            not is_nil(body) and
+            exists(
+              user,
+              active == true and age >= 18 and
+                exists(organization, active == true and employee_count > 0)
+            ) and
+            exists(tags, priority >= 50) and
+            exists(category, active == true) and
+            exists(comments, approved == true and likes >= 1)
         )
         |> Ash.Query.distinct(:category_id)
         |> Ash.Query.sort(
@@ -1221,8 +1257,8 @@ defmodule AshXTDB.UltimateStressTest do
       assert length(results) <= 5
       # All results should be published with view_count > 0 and have body
       assert Enum.all?(results, fn post ->
-        post.published in [true, "t"] and post.view_count > 0 and post.body != nil
-      end)
+               post.published in [true, "t"] and post.view_count > 0 and post.body != nil
+             end)
     end
 
     test "projects: full organizational query with member filtering", _ctx do
@@ -1233,17 +1269,19 @@ defmodule AshXTDB.UltimateStressTest do
         Project
         |> Ash.Query.filter(
           active == true and
-          status in ["active", "planning"] and
-          budget > 0 and
-          exists(organization,
-            active == true and
-            user_count > 0
-          ) and
-          exists(members,
-            active == true and
-            post_count > 0 and
-            exists(posts, published == true)
-          )
+            status in ["active", "planning"] and
+            budget > 0 and
+            exists(
+              organization,
+              active == true and
+                user_count > 0
+            ) and
+            exists(
+              members,
+              active == true and
+                post_count > 0 and
+                exists(posts, published == true)
+            )
         )
         |> Ash.Query.sort(
           active_member_count: :desc,
@@ -1257,9 +1295,10 @@ defmodule AshXTDB.UltimateStressTest do
       # in active orgs with users, with active members who have published posts
       # Alpha and Gamma are status="active", Beta is "planning"
       assert length(results) <= 3
+
       assert Enum.all?(results, fn p ->
-        p.active in [true, "t"] and p.status in ["active", "planning"] and p.budget > 0
-      end)
+               p.active in [true, "t"] and p.status in ["active", "planning"] and p.budget > 0
+             end)
     end
   end
 
@@ -1309,8 +1348,8 @@ defmodule AshXTDB.UltimateStressTest do
         Organization
         |> Ash.Query.filter(
           active == true and
-          user_count >= 1 and
-          active_user_count >= 1
+            user_count >= 1 and
+            active_user_count >= 1
         )
         |> Ash.Query.sort(active_user_count: :desc, active_project_count: :desc)
         |> Ash.read!()
@@ -1331,8 +1370,8 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           name_length >= 3 and
-          name_length <= 10 and
-          is_adult == true
+            name_length <= 10 and
+            is_adult == true
         )
         |> Ash.Query.sort(name_length: :desc, age: :asc)
         |> Ash.read!()
@@ -1342,18 +1381,19 @@ defmodule AshXTDB.UltimateStressTest do
       assert length(results) == 9
       # Verify filter conditions
       assert Enum.all?(results, fn u ->
-        String.length(u.name) >= 3 and String.length(u.name) <= 10 and u.age >= 18
-      end)
+               String.length(u.name) >= 3 and String.length(u.name) <= 10 and u.age >= 18
+             end)
     end
 
     test "calculations on related resources", _ctx do
       results =
         Post
         |> Ash.Query.filter(
+          # view_count < 100
           title_length > 5 and
-          has_body == true and
-          is_popular == false and  # view_count < 100
-          exists(user, name_length > 3 and is_adult == true)
+            has_body == true and
+            is_popular == false and
+            exists(user, name_length > 3 and is_adult == true)
         )
         |> Ash.Query.sort(title_length: :desc)
         |> Ash.read!()
@@ -1367,8 +1407,8 @@ defmodule AshXTDB.UltimateStressTest do
       assert length(results) >= 1
       # All results should have body (not nil) and title length > 5
       assert Enum.all?(results, fn post ->
-        post.body != nil and String.length(post.title) > 5
-      end)
+               post.body != nil and String.length(post.title) > 5
+             end)
     end
 
     test "cond-based calculations in filters", _ctx do
@@ -1376,9 +1416,10 @@ defmodule AshXTDB.UltimateStressTest do
       results =
         Post
         |> Ash.Query.filter(
+          # At least "Active" engagement
           published == true and
-          view_count >= 10 and  # At least "Active" engagement
-          exists(category, priority_level != "Low")
+            view_count >= 10 and
+            exists(category, priority_level != "Low")
         )
         |> Ash.Query.sort(view_count: :desc)
         |> Ash.read!()
@@ -1388,8 +1429,8 @@ defmodule AshXTDB.UltimateStressTest do
       assert length(results) >= 1
       # All results should be published with view_count >= 10
       assert Enum.all?(results, fn post ->
-        post.published in [true, "t"] and post.view_count >= 10
-      end)
+               post.published in [true, "t"] and post.view_count >= 10
+             end)
     end
   end
 
@@ -1409,21 +1450,20 @@ defmodule AshXTDB.UltimateStressTest do
         User
         |> Ash.Query.filter(
           # Calculation filter
-          name_length >= 3 and
-          is_adult == true and
           # Aggregate filter
-          post_count >= 1 and
           # Complex boolean with exists
-          (
-            (active == true and exists(organization, active == true)) or
-            (age >= 40 and exists(posts, published == true))
-          ) and
           # 4-level exists
-          exists(posts,
-            exists(comments, approved == true and likes > 0)
-          ) and
           # Cross-cutting exists
-          exists(user_projects, active == true)
+          name_length >= 3 and
+            is_adult == true and
+            post_count >= 1 and
+            ((active == true and exists(organization, active == true)) or
+               (age >= 40 and exists(posts, published == true))) and
+            exists(
+              posts,
+              exists(comments, approved == true and likes > 0)
+            ) and
+            exists(user_projects, active == true)
         )
         |> Ash.Query.distinct(:organization_id)
         |> Ash.Query.sort(
@@ -1444,8 +1484,8 @@ defmodule AshXTDB.UltimateStressTest do
       assert length(results) <= 5
       # All results should be adults with posts
       assert Enum.all?(results, fn u ->
-        u.age >= 18 and String.length(u.name) >= 3
-      end)
+               u.age >= 18 and String.length(u.name) >= 3
+             end)
     end
   end
 end

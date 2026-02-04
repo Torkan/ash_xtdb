@@ -67,6 +67,7 @@ defmodule AshXTDB.Test.Category do
   aggregates do
     count :post_count, :posts
     count :child_count, :children
+
     count :active_post_count, :posts do
       filter expr(not is_nil(body))
     end
@@ -75,20 +76,27 @@ defmodule AshXTDB.Test.Category do
   calculations do
     calculate :name_lower, :string, expr(string_downcase(name))
     calculate :is_root, :boolean, expr(is_nil(parent_id))
-    calculate :display_name, :string, expr(
-      if(is_nil(description),
-        name,
-        name <> " - " <> description
-      )
-    )
-    calculate :priority_level, :string, expr(
-      cond do
-        priority >= 100 -> "Critical"
-        priority >= 50 -> "High"
-        priority >= 10 -> "Medium"
-        true -> "Low"
-      end
-    )
+
+    calculate :display_name,
+              :string,
+              expr(
+                if(
+                  is_nil(description),
+                  name,
+                  name <> " - " <> description
+                )
+              )
+
+    calculate :priority_level,
+              :string,
+              expr(
+                cond do
+                  priority >= 100 -> "Critical"
+                  priority >= 50 -> "High"
+                  priority >= 10 -> "Medium"
+                  true -> "Low"
+                end
+              )
   end
 
   actions do

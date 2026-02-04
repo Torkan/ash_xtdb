@@ -63,12 +63,16 @@ defmodule AshXTDB.Test.Comment do
     calculate :content_length, :integer, expr(string_length(content))
     calculate :is_popular, :boolean, expr(likes >= 10)
     calculate :status, :string, expr(if(approved, "approved", "pending"))
-    calculate :preview, :string, expr(
-      if(string_length(content) > 50,
-        string_slice(content, 0, 47) <> "...",
-        content
-      )
-    )
+
+    calculate :preview,
+              :string,
+              expr(
+                if(
+                  string_length(content) > 50,
+                  string_slice(content, 0, 47) <> "...",
+                  content
+                )
+              )
   end
 
   actions do

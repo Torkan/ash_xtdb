@@ -69,9 +69,11 @@ defmodule AshXTDB.Test.Project do
 
   aggregates do
     count :member_count, :members
+
     count :active_member_count, :members do
       filter expr(active == true)
     end
+
     sum :total_budget_allocated, :user_projects, :hours_allocated
   end
 
@@ -79,24 +81,30 @@ defmodule AshXTDB.Test.Project do
     calculate :name_lower, :string, expr(string_downcase(name))
     calculate :code_upper, :string, expr(string_upcase(code))
     calculate :is_active_project, :boolean, expr(active == true and status != "completed")
-    calculate :budget_category, :string, expr(
-      cond do
-        is_nil(budget) -> "Unbudgeted"
-        budget < 10000 -> "Small"
-        budget < 100000 -> "Medium"
-        budget < 1000000 -> "Large"
-        true -> "Enterprise"
-      end
-    )
-    calculate :status_priority, :integer, expr(
-      cond do
-        status == "active" -> 1
-        status == "planning" -> 2
-        status == "on_hold" -> 3
-        status == "completed" -> 4
-        true -> 5
-      end
-    )
+
+    calculate :budget_category,
+              :string,
+              expr(
+                cond do
+                  is_nil(budget) -> "Unbudgeted"
+                  budget < 10000 -> "Small"
+                  budget < 100_000 -> "Medium"
+                  budget < 1_000_000 -> "Large"
+                  true -> "Enterprise"
+                end
+              )
+
+    calculate :status_priority,
+              :integer,
+              expr(
+                cond do
+                  status == "active" -> 1
+                  status == "planning" -> 2
+                  status == "on_hold" -> 3
+                  status == "completed" -> 4
+                  true -> 5
+                end
+              )
   end
 
   actions do

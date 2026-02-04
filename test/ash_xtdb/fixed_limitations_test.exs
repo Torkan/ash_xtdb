@@ -167,22 +167,42 @@ defmodule AshXTDB.FixedLimitationsTest do
       # Alice: 0 posts, Bob: 1 post, Carol: 3 posts, Dave: 5 posts
       alice =
         User
-        |> Ash.Changeset.for_create(:create, %{email: "alice@test.com", name: "Alice", age: 25, active: true})
+        |> Ash.Changeset.for_create(:create, %{
+          email: "alice@test.com",
+          name: "Alice",
+          age: 25,
+          active: true
+        })
         |> Ash.create!()
 
       bob =
         User
-        |> Ash.Changeset.for_create(:create, %{email: "bob@test.com", name: "Bob", age: 30, active: true})
+        |> Ash.Changeset.for_create(:create, %{
+          email: "bob@test.com",
+          name: "Bob",
+          age: 30,
+          active: true
+        })
         |> Ash.create!()
 
       carol =
         User
-        |> Ash.Changeset.for_create(:create, %{email: "carol@test.com", name: "Carol", age: 28, active: true})
+        |> Ash.Changeset.for_create(:create, %{
+          email: "carol@test.com",
+          name: "Carol",
+          age: 28,
+          active: true
+        })
         |> Ash.create!()
 
       dave =
         User
-        |> Ash.Changeset.for_create(:create, %{email: "dave@test.com", name: "Dave", age: 35, active: false})
+        |> Ash.Changeset.for_create(:create, %{
+          email: "dave@test.com",
+          name: "Dave",
+          age: 35,
+          active: false
+        })
         |> Ash.create!()
 
       # Create posts: Bob=1, Carol=3, Dave=5
@@ -323,24 +343,48 @@ defmodule AshXTDB.FixedLimitationsTest do
       # Create a user for posts
       user =
         User
-        |> Ash.Changeset.for_create(:create, %{email: "m2m@test.com", name: "M2MUser", age: 30, active: true})
+        |> Ash.Changeset.for_create(:create, %{
+          email: "m2m@test.com",
+          name: "M2MUser",
+          age: 30,
+          active: true
+        })
         |> Ash.create!()
 
       # Create tags with different priorities
-      elixir_tag = Tag |> Ash.Changeset.for_create(:create, %{name: "elixir", priority: 100}) |> Ash.create!()
-      phoenix_tag = Tag |> Ash.Changeset.for_create(:create, %{name: "phoenix", priority: 90}) |> Ash.create!()
-      xtdb_tag = Tag |> Ash.Changeset.for_create(:create, %{name: "xtdb", priority: 80}) |> Ash.create!()
-      unused_tag = Tag |> Ash.Changeset.for_create(:create, %{name: "unused", priority: 10}) |> Ash.create!()
+      elixir_tag =
+        Tag
+        |> Ash.Changeset.for_create(:create, %{name: "elixir", priority: 100})
+        |> Ash.create!()
+
+      phoenix_tag =
+        Tag
+        |> Ash.Changeset.for_create(:create, %{name: "phoenix", priority: 90})
+        |> Ash.create!()
+
+      xtdb_tag =
+        Tag |> Ash.Changeset.for_create(:create, %{name: "xtdb", priority: 80}) |> Ash.create!()
+
+      unused_tag =
+        Tag |> Ash.Changeset.for_create(:create, %{name: "unused", priority: 10}) |> Ash.create!()
 
       # Create posts with different publication states
       published_post1 =
         Post
-        |> Ash.Changeset.for_create(:create, %{title: "Published 1", published: true, user_id: user.id})
+        |> Ash.Changeset.for_create(:create, %{
+          title: "Published 1",
+          published: true,
+          user_id: user.id
+        })
         |> Ash.create!()
 
       published_post2 =
         Post
-        |> Ash.Changeset.for_create(:create, %{title: "Published 2", published: true, user_id: user.id})
+        |> Ash.Changeset.for_create(:create, %{
+          title: "Published 2",
+          published: true,
+          user_id: user.id
+        })
         |> Ash.create!()
 
       draft_post =
@@ -353,11 +397,25 @@ defmodule AshXTDB.FixedLimitationsTest do
       # - phoenix_tag: linked to published_post1 only
       # - xtdb_tag: linked to draft_post only
       # - unused_tag: not linked to any posts
-      PostTag |> Ash.Changeset.for_create(:create, %{post_id: published_post1.id, tag_id: elixir_tag.id}) |> Ash.create!()
-      PostTag |> Ash.Changeset.for_create(:create, %{post_id: draft_post.id, tag_id: elixir_tag.id}) |> Ash.create!()
-      PostTag |> Ash.Changeset.for_create(:create, %{post_id: published_post1.id, tag_id: phoenix_tag.id}) |> Ash.create!()
-      PostTag |> Ash.Changeset.for_create(:create, %{post_id: draft_post.id, tag_id: xtdb_tag.id}) |> Ash.create!()
-      PostTag |> Ash.Changeset.for_create(:create, %{post_id: published_post2.id, tag_id: elixir_tag.id}) |> Ash.create!()
+      PostTag
+      |> Ash.Changeset.for_create(:create, %{post_id: published_post1.id, tag_id: elixir_tag.id})
+      |> Ash.create!()
+
+      PostTag
+      |> Ash.Changeset.for_create(:create, %{post_id: draft_post.id, tag_id: elixir_tag.id})
+      |> Ash.create!()
+
+      PostTag
+      |> Ash.Changeset.for_create(:create, %{post_id: published_post1.id, tag_id: phoenix_tag.id})
+      |> Ash.create!()
+
+      PostTag
+      |> Ash.Changeset.for_create(:create, %{post_id: draft_post.id, tag_id: xtdb_tag.id})
+      |> Ash.create!()
+
+      PostTag
+      |> Ash.Changeset.for_create(:create, %{post_id: published_post2.id, tag_id: elixir_tag.id})
+      |> Ash.create!()
 
       {:ok,
        user: user,
@@ -459,17 +517,29 @@ defmodule AshXTDB.FixedLimitationsTest do
       # Organization -> Users -> Posts
       org_with_posts =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "OrgWithPosts", active: true, employee_count: 10})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "OrgWithPosts",
+          active: true,
+          employee_count: 10
+        })
         |> Ash.create!()
 
       org_without_posts =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "OrgWithoutPosts", active: true, employee_count: 5})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "OrgWithoutPosts",
+          active: true,
+          employee_count: 5
+        })
         |> Ash.create!()
 
       org_inactive =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "OrgInactive", active: false, employee_count: 3})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "OrgInactive",
+          active: false,
+          employee_count: 3
+        })
         |> Ash.create!()
 
       # Create users
@@ -589,12 +659,20 @@ defmodule AshXTDB.FixedLimitationsTest do
       # Organization -> Users -> Posts -> Comments
       org =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "CommentOrg", active: true, employee_count: 10})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "CommentOrg",
+          active: true,
+          employee_count: 10
+        })
         |> Ash.create!()
 
       org_no_comments =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "NoCommentOrg", active: true, employee_count: 5})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "NoCommentOrg",
+          active: true,
+          employee_count: 5
+        })
         |> Ash.create!()
 
       user_with_comments =
@@ -659,18 +737,17 @@ defmodule AshXTDB.FixedLimitationsTest do
         })
         |> Ash.create!()
 
-      {:ok,
-       org: org,
-       org_no_comments: org_no_comments,
-       approved_comment: approved_comment}
+      {:ok, org: org, org_no_comments: org_no_comments, approved_comment: approved_comment}
     end
 
     test "4-level: org -> users -> posts -> comments (any comments)" do
       orgs =
         Organization
         |> Ash.Query.filter(
-          exists(users,
-            exists(posts,
+          exists(
+            users,
+            exists(
+              posts,
               exists(comments, true)
             )
           )
@@ -687,8 +764,10 @@ defmodule AshXTDB.FixedLimitationsTest do
       orgs =
         Organization
         |> Ash.Query.filter(
-          exists(users,
-            exists(posts,
+          exists(
+            users,
+            exists(
+              posts,
               exists(comments, approved == true)
             )
           )
@@ -703,8 +782,10 @@ defmodule AshXTDB.FixedLimitationsTest do
       orgs =
         Organization
         |> Ash.Query.filter(
-          exists(users,
-            exists(posts,
+          exists(
+            users,
+            exists(
+              posts,
               exists(comments, likes >= 5)
             )
           )
@@ -743,12 +824,20 @@ defmodule AshXTDB.FixedLimitationsTest do
       # Organization -> Projects -> Members (via UserProject)
       org_with_members =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "OrgWithMembers", active: true, employee_count: 10})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "OrgWithMembers",
+          active: true,
+          employee_count: 10
+        })
         |> Ash.create!()
 
       org_without_members =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "OrgWithoutMembers", active: true, employee_count: 5})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "OrgWithoutMembers",
+          active: true,
+          employee_count: 5
+        })
         |> Ash.create!()
 
       project_with_members =
@@ -864,7 +953,11 @@ defmodule AshXTDB.FixedLimitationsTest do
       # Create a complete hierarchy to test all features together
       org =
         Organization
-        |> Ash.Changeset.for_create(:create, %{name: "CombinedOrg", active: true, employee_count: 50})
+        |> Ash.Changeset.for_create(:create, %{
+          name: "CombinedOrg",
+          active: true,
+          employee_count: 50
+        })
         |> Ash.create!()
 
       # Create users with varying post counts
@@ -910,7 +1003,8 @@ defmodule AshXTDB.FixedLimitationsTest do
       |> Ash.create!()
 
       # Create tags and link them
-      hot_tag = Tag |> Ash.Changeset.for_create(:create, %{name: "hot", priority: 100}) |> Ash.create!()
+      hot_tag =
+        Tag |> Ash.Changeset.for_create(:create, %{name: "hot", priority: 100}) |> Ash.create!()
 
       [first_post | _] =
         Post
@@ -918,7 +1012,9 @@ defmodule AshXTDB.FixedLimitationsTest do
         |> Ash.Query.limit(1)
         |> Ash.read!()
 
-      PostTag |> Ash.Changeset.for_create(:create, %{post_id: first_post.id, tag_id: hot_tag.id}) |> Ash.create!()
+      PostTag
+      |> Ash.Changeset.for_create(:create, %{post_id: first_post.id, tag_id: hot_tag.id})
+      |> Ash.create!()
 
       {:ok, org: org, prolific_user: prolific_user, casual_user: casual_user, hot_tag: hot_tag}
     end
@@ -939,7 +1035,8 @@ defmodule AshXTDB.FixedLimitationsTest do
       orgs =
         Organization
         |> Ash.Query.filter(
-          exists(users,
+          exists(
+            users,
             exists(posts, exists(tags, name == "hot"))
           )
         )

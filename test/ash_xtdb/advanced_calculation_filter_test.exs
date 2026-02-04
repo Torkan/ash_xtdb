@@ -699,7 +699,9 @@ defmodule AshXTDB.AdvancedCalculationFilterTest do
       # It should have multiple WHEN clauses (for age < 18, age < 30, age < 50)
       # but NOT nested CASE statements
       when_count = length(Regex.scan(~r/WHEN/, where_clause))
-      assert when_count >= 3, "Expected at least 3 WHEN clauses for age_bracket cond, got #{when_count}"
+
+      assert when_count >= 3,
+             "Expected at least 3 WHEN clauses for age_bracket cond, got #{when_count}"
 
       # Verify it's flat - should have only one CASE and one END
       case_count = length(Regex.scan(~r/\bCASE\b/, where_clause))

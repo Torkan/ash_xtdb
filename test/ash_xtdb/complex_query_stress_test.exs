@@ -11,7 +11,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.{Organization, User, Post, Tag, PostTag}
+  alias AshXTDB.Test.{Organization, User, Post}
 
   require Ash.Query
 
@@ -116,7 +116,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       results =
         User
         |> Ash.Query.filter(
-          (age >= 18 and age <= 50) and
+          age >= 18 and age <= 50 and
             (active == true or organization_id == ^ctx.tech_org.id) and
             not is_nil(name) and
             name != "David" and
@@ -148,7 +148,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       {:ok, %{org: org, minor: minor, young_adult: young_adult, middle: middle, senior: senior}}
     end
 
-    test "filter by cond-based calculation with multiple brackets", ctx do
+    test "filter by cond-based calculation with multiple brackets", _ctx do
       # Filter by age_bracket which uses a complex cond expression
       results =
         User
@@ -165,7 +165,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert names == ["MiddleAge", "YoungAdult"]
     end
 
-    test "filter combining calculation with relationship traversal", ctx do
+    test "filter combining calculation with relationship traversal", _ctx do
       # Filter users where their organization is_tech AND user is_adult
       results =
         User
@@ -178,7 +178,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert "YoungAdult" in names
     end
 
-    test "filter by string calculation with comparison operators", ctx do
+    test "filter by string calculation with comparison operators", _ctx do
       # name_lower produces lowercase name, filter with string comparison
       results =
         User
@@ -214,7 +214,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       {:ok, %{org: org, prolific: prolific, moderate: moderate, lurker: lurker}}
     end
 
-    test "exists with calculation filter inside", ctx do
+    test "exists with calculation filter inside", _ctx do
       # Find users who have posts where has_body calculation is true
       results =
         User
@@ -229,7 +229,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert names == ["Moderate", "Prolific"]
     end
 
-    test "not exists combined with other filters", ctx do
+    test "not exists combined with other filters", _ctx do
       # Find active users who don't have any posts
       results =
         User
@@ -241,13 +241,11 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert hd(results).name == "Lurker"
     end
 
-    test "exists with complex boolean inside", ctx do
+    test "exists with complex boolean inside", _ctx do
       # Find users with posts that have body AND title containing "Article"
       results =
         User
-        |> Ash.Query.filter(
-          exists(posts, not is_nil(body) and contains(title, "Article"))
-        )
+        |> Ash.Query.filter(exists(posts, not is_nil(body) and contains(title, "Article")))
         |> Ash.read!()
 
       # Only Prolific has "Tech Article" with body
@@ -255,15 +253,13 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert hd(results).name == "Prolific"
     end
 
-    test "multiple exists conditions combined", ctx do
+    test "multiple exists conditions combined", _ctx do
       # Find users who have BOTH:
       # - at least one post with body
       # - at least one post without body (nil)
       results =
         User
-        |> Ash.Query.filter(
-          exists(posts, not is_nil(body)) and exists(posts, is_nil(body))
-        )
+        |> Ash.Query.filter(exists(posts, not is_nil(body)) and exists(posts, is_nil(body)))
         |> Ash.read!()
 
       # Only Prolific has both types
@@ -316,7 +312,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       {:ok, %{old: old_record, recent: recent_record, future: future_record}}
     end
 
-    test "ago() combined with math calculations", ctx do
+    test "ago() combined with math calculations", _ctx do
       # Find records created more than 1 day ago with value > 50
       results =
         ExpressionTestResource
@@ -329,7 +325,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert hd(results).rounded_value == 101.0
     end
 
-    test "date comparison with calculation sort", ctx do
+    test "date comparison with calculation sort", _ctx do
       # Find records created before now, sorted by rounded value
       results =
         ExpressionTestResource
@@ -344,13 +340,11 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert names == ["recent", "old"]
     end
 
-    test "from_now() with multiple conditions", ctx do
+    test "from_now() with multiple conditions", _ctx do
       # Find records created between now and 3 days from now
       results =
         ExpressionTestResource
-        |> Ash.Query.filter(
-          created_at > now() and created_at < from_now(3, :day)
-        )
+        |> Ash.Query.filter(created_at > now() and created_at < from_now(3, :day))
         |> Ash.read!()
 
       assert length(results) == 1
@@ -432,7 +426,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
        }}
     end
 
-    test "filter organization by user calculations", ctx do
+    test "filter organization by user calculations", _ctx do
       # Find organizations where at least one user is an adult
       results =
         Organization
@@ -443,7 +437,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert hd(results).name == "TechCorp"
     end
 
-    test "filter users through organization calculation", ctx do
+    test "filter users through organization calculation", _ctx do
       # Find users in tech organizations
       results =
         User
@@ -455,7 +449,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert names == ["Alice", "Bob"]
     end
 
-    test "combining local and relationship calculations", ctx do
+    test "combining local and relationship calculations", _ctx do
       # Find adult users in tech orgs who have posts with body
       results =
         User
@@ -532,9 +526,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       # age > 15 AND age >= 20 AND age < 40 AND age <= 35 AND age != 30
       results =
         User
-        |> Ash.Query.filter(
-          age > 15 and age >= 20 and age < 40 and age <= 35 and age != 30
-        )
+        |> Ash.Query.filter(age > 15 and age >= 20 and age < 40 and age <= 35 and age != 30)
         |> Ash.read!()
 
       # Valid: 20, 25, 35 (30 excluded by !=, 15 by >, 40 by <)
@@ -576,7 +568,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
        }}
     end
 
-    test "monster query combining 10+ features", ctx do
+    test "monster query combining 10+ features", _ctx do
       # The ultimate test: combine as many features as possible
       # Find users who:
       # 1. Are adults (is_adult calculation)
@@ -621,7 +613,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
       assert second.age_bracket == "Middle Age"
     end
 
-    test "monster query with OR branches containing calculations", ctx do
+    test "monster query with OR branches containing calculations", _ctx do
       # Find users who are either:
       # - Young Adults (age_bracket) in tech with posts
       # - OR Senior/Middle Age and active

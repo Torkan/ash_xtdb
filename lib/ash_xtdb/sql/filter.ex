@@ -332,21 +332,27 @@ defmodule AshXTDB.SQL.Filter do
         [amount, interval] = Map.get(expr, :arguments, [0, :second])
         {amount_sql, state} = ref_or_value_to_sql(amount, state)
         interval_str = interval_to_sql(interval)
-        {"(CURRENT_TIMESTAMP - (#{amount_sql} * INTERVAL '1' #{String.upcase(interval_str)}))", state}
+
+        {"(CURRENT_TIMESTAMP - (#{amount_sql} * INTERVAL '1' #{String.upcase(interval_str)}))",
+         state}
 
       String.ends_with?(struct_string, ".FromNow") ->
         [amount, interval] = Map.get(expr, :arguments, [0, :second])
         {amount_sql, state} = ref_or_value_to_sql(amount, state)
         interval_str = interval_to_sql(interval)
-        {"(CURRENT_TIMESTAMP + (#{amount_sql} * INTERVAL '1' #{String.upcase(interval_str)}))", state}
+
+        {"(CURRENT_TIMESTAMP + (#{amount_sql} * INTERVAL '1' #{String.upcase(interval_str)}))",
+         state}
 
       # Math functions
       String.ends_with?(struct_string, ".Round") ->
         args = Map.get(expr, :arguments, [])
+
         case args do
           [value] ->
             {value_sql, state} = ref_or_value_to_sql(value, state)
             {"ROUND(#{value_sql})", state}
+
           [value, precision] ->
             {value_sql, state} = ref_or_value_to_sql(value, state)
             {precision_sql, state} = ref_or_value_to_sql(precision, state)
@@ -381,7 +387,8 @@ defmodule AshXTDB.SQL.Filter do
         {sub_sql, state} = ref_or_value_to_sql(substring, state)
         # POSITION returns 1-based or 0 if not found; Ash expects 0-based or nil
         # We return (POSITION(...) - 1), but need NULLIF for not-found case
-        {"(CASE WHEN POSITION(#{sub_sql} IN #{str_sql}) = 0 THEN NULL ELSE POSITION(#{sub_sql} IN #{str_sql}) - 1 END)", state}
+        {"(CASE WHEN POSITION(#{sub_sql} IN #{str_sql}) = 0 THEN NULL ELSE POSITION(#{sub_sql} IN #{str_sql}) - 1 END)",
+         state}
 
       # Date/Time addition
       String.ends_with?(struct_string, ".DateAdd") ->
@@ -408,7 +415,8 @@ defmodule AshXTDB.SQL.Filter do
   end
 
   # Catch-all for unhandled non-struct expressions
-  defp expression_to_sql(expr, state) when not is_map(expr) or not is_map_key(expr, :__struct__) do
+  defp expression_to_sql(expr, state)
+       when not is_map(expr) or not is_map_key(expr, :__struct__) do
     require Logger
     Logger.warning("Unhandled filter expression: #{inspect(expr)}")
     {nil, state}
@@ -471,7 +479,12 @@ defmodule AshXTDB.SQL.Filter do
 
               {inner_sql, inner_state} = expression_to_sql(expr, inner_state)
               # Restore original state but keep params and join_counter
-              state = %{state | params: inner_state.params, join_counter: inner_state.join_counter}
+              state = %{
+                state
+                | params: inner_state.params,
+                  join_counter: inner_state.join_counter
+              }
+
               {inner_sql, state}
           end
         end
@@ -663,17 +676,41 @@ defmodule AshXTDB.SQL.Filter do
   defp duration_to_sql(%Duration{} = duration) do
     parts = []
 
-    parts = if duration.year && duration.year != 0, do: ["#{duration.year} YEAR" | parts], else: parts
-    parts = if duration.month && duration.month != 0, do: ["#{duration.month} MONTH" | parts], else: parts
-    parts = if duration.week && duration.week != 0, do: ["#{duration.week * 7} DAY" | parts], else: parts
+    parts =
+      if duration.year && duration.year != 0, do: ["#{duration.year} YEAR" | parts], else: parts
+
+    parts =
+      if duration.month && duration.month != 0,
+        do: ["#{duration.month} MONTH" | parts],
+        else: parts
+
+    parts =
+      if duration.week && duration.week != 0,
+        do: ["#{duration.week * 7} DAY" | parts],
+        else: parts
+
     parts = if duration.day && duration.day != 0, do: ["#{duration.day} DAY" | parts], else: parts
-    parts = if duration.hour && duration.hour != 0, do: ["#{duration.hour} HOUR" | parts], else: parts
-    parts = if duration.minute && duration.minute != 0, do: ["#{duration.minute} MINUTE" | parts], else: parts
-    parts = if duration.second && duration.second != 0, do: ["#{duration.second} SECOND" | parts], else: parts
+
+    parts =
+      if duration.hour && duration.hour != 0, do: ["#{duration.hour} HOUR" | parts], else: parts
+
+    parts =
+      if duration.minute && duration.minute != 0,
+        do: ["#{duration.minute} MINUTE" | parts],
+        else: parts
+
+    parts =
+      if duration.second && duration.second != 0,
+        do: ["#{duration.second} SECOND" | parts],
+        else: parts
 
     case Enum.reverse(parts) do
-      [] -> "INTERVAL '0' SECOND"
-      [single] -> "INTERVAL '#{single}'"
+      [] ->
+        "INTERVAL '0' SECOND"
+
+      [single] ->
+        "INTERVAL '#{single}'"
+
       multiple ->
         # Multiple parts need to be added together
         intervals = Enum.map(multiple, fn part -> "INTERVAL '#{part}'" end)
@@ -787,14 +824,22 @@ defmodule AshXTDB.SQL.Filter do
   end
 
   # Handle Ash.Query.Call with name: :if and positional args
-  defp extract_cases(%Ash.Query.Call{name: :if, args: [condition, true_val, false_val]}, state, acc) do
+  defp extract_cases(
+         %Ash.Query.Call{name: :if, args: [condition, true_val, false_val]},
+         state,
+         acc
+       ) do
     {cond_sql, state} = expression_to_sql(condition, state)
     {true_sql, state} = ref_or_value_to_sql(true_val, state)
     extract_cases(false_val, state, [{cond_sql, true_sql} | acc])
   end
 
   # Handle Ash.Query.Function.If struct (3-arg form)
-  defp extract_cases(%{__struct__: struct_name, arguments: [condition, when_true, when_false]}, state, acc)
+  defp extract_cases(
+         %{__struct__: struct_name, arguments: [condition, when_true, when_false]},
+         state,
+         acc
+       )
        when struct_name == Ash.Query.Function.If do
     {cond_sql, state} = expression_to_sql(condition, state)
     {true_sql, state} = ref_or_value_to_sql(when_true, state)
@@ -993,7 +1038,8 @@ defmodule AshXTDB.SQL.Filter do
     {str_sql, state} = ref_or_value_to_sql(string, state)
     {sub_sql, state} = ref_or_value_to_sql(substring, state)
     # POSITION returns 1-based or 0 if not found; Ash expects 0-based or nil
-    {"(CASE WHEN POSITION(#{sub_sql} IN #{str_sql}) = 0 THEN NULL ELSE POSITION(#{sub_sql} IN #{str_sql}) - 1 END)", state}
+    {"(CASE WHEN POSITION(#{sub_sql} IN #{str_sql}) = 0 THEN NULL ELSE POSITION(#{sub_sql} IN #{str_sql}) - 1 END)",
+     state}
   end
 
   defp call_to_sql(:date_add, args, state) do
@@ -1193,7 +1239,11 @@ defmodule AshXTDB.SQL.Filter do
       nil ->
         # Aggregate not in alias map - this shouldn't happen if build_aggregate_joins worked
         require Logger
-        Logger.warning("Aggregate #{inspect(name)} not found in alias map: #{inspect(agg_alias_map)}")
+
+        Logger.warning(
+          "Aggregate #{inspect(name)} not found in alias map: #{inspect(agg_alias_map)}"
+        )
+
         {"0", state}
 
       agg_expr ->

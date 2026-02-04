@@ -80,8 +80,10 @@ defmodule AshXTDB.Types.Duration do
   def valid_duration?(value) when is_binary(value) do
     case Regex.run(@duration_regex, value) do
       nil -> false
-      [match | _] when match == "P" -> false  # Empty duration "P" is invalid
-      [match | _] when match == "PT" -> false  # Empty time-only duration "PT" is invalid
+      # Empty duration "P" is invalid
+      [match | _] when match == "P" -> false
+      # Empty time-only duration "PT" is invalid
+      [match | _] when match == "PT" -> false
       _ -> true
     end
   end
@@ -118,6 +120,7 @@ defmodule AshXTDB.Types.Duration do
 
   defp parse_capture(nil), do: 0
   defp parse_capture(""), do: 0
+
   defp parse_capture(str) when is_binary(str) do
     case Float.parse(str) do
       {num, _} -> num

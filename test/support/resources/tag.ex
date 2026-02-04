@@ -43,6 +43,7 @@ defmodule AshXTDB.Test.Tag do
 
   aggregates do
     count :post_count, :posts
+
     count :published_post_count, :posts do
       filter expr(published == true)
     end
@@ -52,12 +53,16 @@ defmodule AshXTDB.Test.Tag do
     calculate :name_lower, :string, expr(string_downcase(name))
     calculate :name_length, :integer, expr(string_length(name))
     calculate :is_featured, :boolean, expr(priority >= 100)
-    calculate :display_name, :string, expr(
-      if(is_nil(color),
-        name,
-        "[" <> color <> "] " <> name
-      )
-    )
+
+    calculate :display_name,
+              :string,
+              expr(
+                if(
+                  is_nil(color),
+                  name,
+                  "[" <> color <> "] " <> name
+                )
+              )
   end
 
   actions do

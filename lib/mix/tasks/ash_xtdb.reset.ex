@@ -69,9 +69,14 @@ defmodule Mix.Tasks.AshXtdb.Reset do
 
     database_name =
       case args do
-        [name] -> name
-        [] -> Helpers.database(repo) || Mix.raise("No database name provided or configured in repo")
-        _ -> Mix.raise("Too many arguments. Usage: mix ash_xtdb.reset [DATABASE_NAME]")
+        [name] ->
+          name
+
+        [] ->
+          Helpers.database(repo) || Mix.raise("No database name provided or configured in repo")
+
+        _ ->
+          Mix.raise("Too many arguments. Usage: mix ash_xtdb.reset [DATABASE_NAME]")
       end
 
     reset_database(database_name, repo, opts)
@@ -166,9 +171,7 @@ defmodule Mix.Tasks.AshXtdb.Reset do
   defp wipe_storage(database_name, container) do
     full_path = "#{@storage_path}/#{database_name}"
 
-    case System.cmd("docker", ["exec", container, "rm", "-rf", full_path],
-           stderr_to_stdout: true
-         ) do
+    case System.cmd("docker", ["exec", container, "rm", "-rf", full_path], stderr_to_stdout: true) do
       {_, 0} ->
         :ok
 

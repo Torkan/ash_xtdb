@@ -73,9 +73,11 @@ defmodule AshXTDB.Test.Post do
 
   aggregates do
     count :comment_count, :comments
+
     count :approved_comment_count, :comments do
       filter expr(approved == true)
     end
+
     count :tag_count, :tags
     sum :total_likes, :comments, :likes
   end
@@ -86,17 +88,21 @@ defmodule AshXTDB.Test.Post do
     calculate :preview, :string, expr(if(is_nil(body), title, body))
     calculate :title_length, :integer, expr(string_length(title))
     calculate :is_popular, :boolean, expr(view_count >= 100)
-    calculate :engagement_level, :string, expr(
-      cond do
-        view_count >= 1000 -> "Viral"
-        view_count >= 100 -> "Popular"
-        view_count >= 10 -> "Active"
-        true -> "New"
-      end
-    )
-    calculate :is_complete, :boolean, expr(
-      not is_nil(body) and published == true and not is_nil(category_id)
-    )
+
+    calculate :engagement_level,
+              :string,
+              expr(
+                cond do
+                  view_count >= 1000 -> "Viral"
+                  view_count >= 100 -> "Popular"
+                  view_count >= 10 -> "Active"
+                  true -> "New"
+                end
+              )
+
+    calculate :is_complete,
+              :boolean,
+              expr(not is_nil(body) and published == true and not is_nil(category_id))
   end
 
   actions do

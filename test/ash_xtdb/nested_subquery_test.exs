@@ -105,7 +105,10 @@ defmodule AshXTDB.NestedSubqueryTest do
 
       assert sql =~ "NEST_MANY("
       assert sql =~ "FROM tags n"
-      assert sql =~ "n.\"_id\" IN (SELECT th.\"tag_id\" FROM \"post_tags\" th WHERE th.\"post_id\" = t.\"_id\")"
+
+      assert sql =~
+               "n.\"_id\" IN (SELECT th.\"tag_id\" FROM \"post_tags\" th WHERE th.\"post_id\" = t.\"_id\")"
+
       assert sql =~ "AS \"tags\""
     end
   end
@@ -210,17 +213,29 @@ defmodule AshXTDB.NestedSubqueryTest do
       # Create posts for users
       post1 =
         Post
-        |> Ash.Changeset.for_create(:create, %{title: "NestAlice Post 1", body: "Body 1", user_id: user1.id})
+        |> Ash.Changeset.for_create(:create, %{
+          title: "NestAlice Post 1",
+          body: "Body 1",
+          user_id: user1.id
+        })
         |> Ash.create!()
 
       post2 =
         Post
-        |> Ash.Changeset.for_create(:create, %{title: "NestAlice Post 2", body: "Body 2", user_id: user1.id})
+        |> Ash.Changeset.for_create(:create, %{
+          title: "NestAlice Post 2",
+          body: "Body 2",
+          user_id: user1.id
+        })
         |> Ash.create!()
 
       post3 =
         Post
-        |> Ash.Changeset.for_create(:create, %{title: "NestBob Post 1", body: "Body 3", user_id: user2.id})
+        |> Ash.Changeset.for_create(:create, %{
+          title: "NestBob Post 1",
+          body: "Body 3",
+          user_id: user2.id
+        })
         |> Ash.create!()
 
       {:ok, user1: user1, user2: user2, posts: [post1, post2, post3]}

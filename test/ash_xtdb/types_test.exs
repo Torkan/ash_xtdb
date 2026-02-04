@@ -260,7 +260,8 @@ defmodule AshXTDB.TypesTest do
 
   describe "Period SQL execution" do
     test "executes PERIOD literal in SQL" do
-      sql = "SELECT PERIOD(TIMESTAMP '2024-01-01T00:00:00Z', TIMESTAMP '2024-12-31T23:59:59Z') AS time_range"
+      sql =
+        "SELECT PERIOD(TIMESTAMP '2024-01-01T00:00:00Z', TIMESTAMP '2024-12-31T23:59:59Z') AS time_range"
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[time_range]]}} ->
@@ -351,7 +352,9 @@ defmodule AshXTDB.TypesTest do
   describe "SQL execution with inlined type values" do
     test "executes query with inlined Interval" do
       interval = %Interval{days: 7}
-      sql = SQL.inline_params("SELECT TIMESTAMP '2024-01-01T00:00:00Z' + $1 AS future", [interval])
+
+      sql =
+        SQL.inline_params("SELECT TIMESTAMP '2024-01-01T00:00:00Z' + $1 AS future", [interval])
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[result]]}} ->

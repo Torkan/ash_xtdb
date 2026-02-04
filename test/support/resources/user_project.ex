@@ -61,24 +61,30 @@ defmodule AshXTDB.Test.UserProject do
 
   calculations do
     calculate :is_lead, :boolean, expr(role in ["lead", "manager", "owner"])
-    calculate :commitment_level, :string, expr(
-      cond do
-        hours_allocated >= 40 -> "Full-time"
-        hours_allocated >= 20 -> "Part-time"
-        hours_allocated >= 5 -> "Contributing"
-        true -> "Minimal"
-      end
-    )
-    calculate :role_priority, :integer, expr(
-      cond do
-        role == "owner" -> 1
-        role == "manager" -> 2
-        role == "lead" -> 3
-        role == "senior" -> 4
-        role == "member" -> 5
-        true -> 6
-      end
-    )
+
+    calculate :commitment_level,
+              :string,
+              expr(
+                cond do
+                  hours_allocated >= 40 -> "Full-time"
+                  hours_allocated >= 20 -> "Part-time"
+                  hours_allocated >= 5 -> "Contributing"
+                  true -> "Minimal"
+                end
+              )
+
+    calculate :role_priority,
+              :integer,
+              expr(
+                cond do
+                  role == "owner" -> 1
+                  role == "manager" -> 2
+                  role == "lead" -> 3
+                  role == "senior" -> 4
+                  role == "member" -> 5
+                  true -> 6
+                end
+              )
   end
 
   actions do

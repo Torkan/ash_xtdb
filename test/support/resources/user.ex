@@ -71,6 +71,7 @@ defmodule AshXTDB.Test.User do
     count :post_count, :posts
     count :comment_count, :comments
     count :project_count, :projects
+
     count :published_post_count, :posts do
       filter expr(published == true)
     end
@@ -80,15 +81,18 @@ defmodule AshXTDB.Test.User do
     calculate :display_name, :string, expr(if(is_nil(name), email, name))
     calculate :name_lower, :string, expr(string_downcase(name))
     calculate :is_adult, :boolean, expr(age >= 18)
-    calculate :age_bracket, :string,
-      expr(
-        cond do
-          age < 18 -> "Minor"
-          age < 30 -> "Young Adult"
-          age < 50 -> "Middle Age"
-          true -> "Senior"
-        end
-      )
+
+    calculate :age_bracket,
+              :string,
+              expr(
+                cond do
+                  age < 18 -> "Minor"
+                  age < 30 -> "Young Adult"
+                  age < 50 -> "Middle Age"
+                  true -> "Senior"
+                end
+              )
+
     calculate :name_length, :integer, expr(string_length(name))
   end
 

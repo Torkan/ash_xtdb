@@ -36,7 +36,7 @@ defmodule AshXTDB.AtomicUpdateTest do
   describe "atomic increment" do
     test "can increment age atomically", %{user: user} do
       # Update using atomic expression
-      {:ok, updated} =
+      {:ok, _updated} =
         user
         |> Ash.Changeset.for_update(:update)
         |> Ash.Changeset.atomic_update(:age, Ash.Expr.expr(age + 1))
@@ -132,9 +132,7 @@ defmodule AshXTDB.AtomicUpdateTest do
       # Update all users atomically
       User
       |> Ash.Query.filter(age >= 25)
-      |> Ash.bulk_update!(:update, %{}, [
-        atomic_update: %{age: Ash.Expr.expr(age + 5)}
-      ])
+      |> Ash.bulk_update!(:update, %{}, atomic_update: %{age: Ash.Expr.expr(age + 5)})
 
       # Verify all were updated
       users =

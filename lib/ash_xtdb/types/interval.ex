@@ -200,8 +200,12 @@ defmodule AshXTDB.Types.Interval do
 
   defp parse_captures(captures) do
     Enum.map(captures, fn
-      nil -> 0
-      "" -> 0
+      nil ->
+        0
+
+      "" ->
+        0
+
       str ->
         case Float.parse(str) do
           {num, _} -> if trunc(num) == num, do: trunc(num), else: num

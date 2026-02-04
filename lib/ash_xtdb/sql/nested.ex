@@ -177,6 +177,7 @@ defmodule AshXTDB.SQL.Nested do
     through_source_col = format_column(through_alias, source_attr_on_join)
 
     quoted_through_table = AshXTDB.SQL.quote_identifier(through_table)
+
     subquery =
       "#{dest_col} IN (SELECT #{through_dest_col} FROM #{quoted_through_table} #{through_alias} WHERE #{through_source_col} = #{parent_col})"
 

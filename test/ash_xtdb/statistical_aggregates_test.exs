@@ -275,7 +275,7 @@ defmodule AshXTDB.StatisticalAggregatesTest do
 
       {sql, _params} = SQL.to_aggregate_sql(query, [agg])
 
-      assert sql =~ "STDDEV_POP(t.age)"
+      assert sql =~ "STDDEV_POP(t.\"age\")"
       assert sql =~ "AS \"age_stddev\""
     end
 
@@ -291,7 +291,7 @@ defmodule AshXTDB.StatisticalAggregatesTest do
 
       {sql, _params} = SQL.to_aggregate_sql(query, [agg])
 
-      assert sql =~ "BOOL_AND(t.active)"
+      assert sql =~ "BOOL_AND(t.\"active\")"
     end
   end
 

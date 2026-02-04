@@ -86,7 +86,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
       assert ids == Enum.sort([ctx.alice.id, ctx.bob.id])
     end
 
-    test "exists with title_length integer calculation", ctx do
+    test "exists with title_length integer calculation", _ctx do
       # Find users who have posts with title_length > 15
       # title_length is string_length(title)
       results =
@@ -115,7 +115,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
       assert hd(results).id == ctx.alice.id
     end
 
-    test "exists combining multiple calculation filters", ctx do
+    test "exists combining multiple calculation filters", _ctx do
       # Find users with posts where has_body AND title_length > 8
       results =
         User
@@ -176,7 +176,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
        }}
     end
 
-    test "exists through users.posts path", ctx do
+    test "exists through users.posts path", _ctx do
       # Find organizations that have users who have posts
       results =
         Organization
@@ -203,7 +203,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
       assert hd(results).id == ctx.tech_org.id
     end
 
-    test "exists through users.posts with calculation filter", ctx do
+    test "exists through users.posts with calculation filter", _ctx do
       # Find organizations that have users who have posts with has_body == true
       results =
         Organization
@@ -227,7 +227,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
       assert hd(results).id == ctx.finance_org.id
     end
 
-    test "not exists through multi-level path", ctx do
+    test "not exists through multi-level path", _ctx do
       # Find organizations that have NO users with posts containing "Tech"
       results =
         Organization
@@ -296,7 +296,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
       assert hd(results).id == ctx.active_org.id
     end
 
-    test "exists users who have NO posts with body", ctx do
+    test "exists users who have NO posts with body", _ctx do
       # Find organizations where all user posts have no body
       # exists(users, not exists(posts, has_body))
       results =
@@ -311,15 +311,13 @@ defmodule AshXTDB.NestedExistsCalculationTest do
       assert "QuietOrg" in names
     end
 
-    test "complex nested exists with calculations", ctx do
+    test "complex nested exists with calculations", _ctx do
       # Find organizations that have:
       # - At least one user who is active
       # - AND that user has posts with title_length > 5
       results =
         Organization
-        |> Ash.Query.filter(
-          exists(users, active == true and exists(posts, title_length > 5))
-        )
+        |> Ash.Query.filter(exists(users, active == true and exists(posts, title_length > 5)))
         |> Ash.read!()
 
       # ActiveOrg: active user with "Post 1" (6 chars) - matches
@@ -357,13 +355,11 @@ defmodule AshXTDB.NestedExistsCalculationTest do
       assert hd(results).id == ctx.org.id
     end
 
-    test "exists with user age_bracket calculation", ctx do
+    test "exists with user age_bracket calculation", _ctx do
       # Find organization with "Young Adult" users who have posts
       results =
         Organization
-        |> Ash.Query.filter(
-          exists(users, age_bracket == "Young Adult" and exists(posts, true))
-        )
+        |> Ash.Query.filter(exists(users, age_bracket == "Young Adult" and exists(posts, true)))
         |> Ash.read!()
 
       assert length(results) == 1

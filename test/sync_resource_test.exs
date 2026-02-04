@@ -12,6 +12,7 @@ defmodule AshXTDB.SyncResourceTest do
       Agent.update(__MODULE__, fn calls ->
         [{resource, action_type, data, context} | calls]
       end)
+
       :ok
     end
 
@@ -40,7 +41,7 @@ defmodule AshXTDB.SyncResourceTest do
       extensions: [AshXTDB.SyncResource]
 
     xtdb_sync do
-      sync_function &AshXTDB.SyncResourceTest.SyncTracker.track/4
+      sync_function(&AshXTDB.SyncResourceTest.SyncTracker.track/4)
     end
 
     attributes do
@@ -68,8 +69,8 @@ defmodule AshXTDB.SyncResourceTest do
       extensions: [AshXTDB.SyncResource]
 
     xtdb_sync do
-      sync_function &AshXTDB.SyncResourceTest.SyncTracker.track/4
-      skip_actions [:import]
+      sync_function(&AshXTDB.SyncResourceTest.SyncTracker.track/4)
+      skip_actions([:import])
     end
 
     attributes do
@@ -264,7 +265,7 @@ defmodule AshXTDB.SyncResourceTest do
       # No xtdb_sync block - uses all defaults
       xtdb_sync do
         # Use custom function to avoid needing a real history resource
-        sync_function &AshXTDB.SyncResourceTest.SyncTracker.track/4
+        sync_function(&AshXTDB.SyncResourceTest.SyncTracker.track/4)
       end
 
       attributes do

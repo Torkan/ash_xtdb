@@ -76,9 +76,14 @@ defmodule Mix.Tasks.AshXtdb.Drop do
 
     database_name =
       case args do
-        [name] -> name
-        [] -> Helpers.database(repo) || Mix.raise("No database name provided or configured in repo")
-        _ -> Mix.raise("Too many arguments. Usage: mix ash_xtdb.drop [DATABASE_NAME]")
+        [name] ->
+          name
+
+        [] ->
+          Helpers.database(repo) || Mix.raise("No database name provided or configured in repo")
+
+        _ ->
+          Mix.raise("Too many arguments. Usage: mix ash_xtdb.drop [DATABASE_NAME]")
       end
 
     drop_database(database_name, repo, opts)
@@ -138,7 +143,11 @@ defmodule Mix.Tasks.AshXtdb.Drop do
     else
       unless quiet do
         Mix.shell().info("")
-        Mix.shell().info("Data remains on disk. To re-attach: mix ash_xtdb.setup #{database_name}")
+
+        Mix.shell().info(
+          "Data remains on disk. To re-attach: mix ash_xtdb.setup #{database_name}"
+        )
+
         Mix.shell().info("To permanently delete: mix ash_xtdb.drop #{database_name} --wipe")
       end
     end
@@ -149,9 +158,7 @@ defmodule Mix.Tasks.AshXtdb.Drop do
   defp wipe_storage(database_name, container) do
     full_path = "#{@storage_path}/#{database_name}"
 
-    case System.cmd("docker", ["exec", container, "rm", "-rf", full_path],
-           stderr_to_stdout: true
-         ) do
+    case System.cmd("docker", ["exec", container, "rm", "-rf", full_path], stderr_to_stdout: true) do
       {_, 0} ->
         :ok
 

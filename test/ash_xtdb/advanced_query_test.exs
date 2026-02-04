@@ -211,8 +211,10 @@ defmodule AshXTDB.AdvancedQueryTest do
 
       case AshXTDB.TestRepo.query(sql, []) do
         {:ok, %{rows: [[young, old]]}} ->
-          assert parse_int(young) == 1  # Age 25
-          assert parse_int(old) == 3    # Ages 30, 35, 40
+          # Age 25
+          assert parse_int(young) == 1
+          # Ages 30, 35, 40
+          assert parse_int(old) == 3
 
         {:error, error} ->
           flunk("Multiple CTEs query failed: #{inspect(error)}")

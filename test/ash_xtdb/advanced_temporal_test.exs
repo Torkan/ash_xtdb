@@ -11,9 +11,9 @@ defmodule AshXTDB.AdvancedTemporalTest do
   use ExUnit.Case, async: false
 
   alias AshXTDB.SQL
+  alias AshXTDB.SQL.DML.Patch
   alias AshXTDB.Query
   alias AshXTDB.Changeset
-  alias AshXTDB.Patch
   alias AshXTDB.Test.User
 
   @moduletag :integration
@@ -295,7 +295,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
       assert sql =~ "UPDATE \"users\" FOR PORTION OF VALID_TIME"
       assert sql =~ "FROM TIMESTAMP '2024-01-01T00:00:00Z'"
       assert sql =~ "TO TIMESTAMP '2024-06-30T23:59:59Z'"
-      assert sql =~ "SET name = $1"
+      assert sql =~ "SET \"name\" = $1"
       assert params == ["New Name", "test-id"]
     end
 
@@ -352,9 +352,9 @@ defmodule AshXTDB.AdvancedTemporalTest do
 
       assert sql =~ "PATCH INTO \"users\""
       assert sql =~ "RECORDS"
-      assert sql =~ "_id: '1'"
-      assert sql =~ "email: 'a@test.com'"
-      assert sql =~ "name: 'A'"
+      assert sql =~ "_id: E'1'"
+      assert sql =~ "email: E'a@test.com'"
+      assert sql =~ "name: E'A'"
     end
 
     test "builds PATCH SQL with multiple records" do

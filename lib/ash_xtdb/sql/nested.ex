@@ -94,8 +94,8 @@ defmodule AshXTDB.SQL.Nested do
     # Build SELECT columns for the subquery
     select_clause = build_subquery_select(opts, subquery_alias)
 
-    # Build FROM clause
-    from_clause = "FROM #{opts.table} #{subquery_alias}"
+    # Build FROM clause (quote table name for safety)
+    from_clause = "FROM #{AshXTDB.SQL.quote_identifier(opts.table)} #{subquery_alias}"
 
     # Build WHERE clause with correlation
     {correlation_condition, correlation_params} =

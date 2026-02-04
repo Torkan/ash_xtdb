@@ -29,7 +29,7 @@ defmodule AshXTDB.NestedSubqueryTest do
       {sql, _params} = Nested.build_subquery(nested_config, "t")
 
       assert sql =~ "NEST_MANY("
-      assert sql =~ "FROM posts n"
+      assert sql =~ "FROM \"posts\" n"
       assert sql =~ "n.\"user_id\" = t.\"_id\""
       assert sql =~ "AS \"posts\""
       assert sql =~ "FETCH FIRST 5 ROWS ONLY"
@@ -47,7 +47,7 @@ defmodule AshXTDB.NestedSubqueryTest do
       {sql, _params} = Nested.build_subquery(nested_config, "t")
 
       assert sql =~ "NEST_ONE("
-      assert sql =~ "FROM users n"
+      assert sql =~ "FROM \"users\" n"
       assert sql =~ "AS \"user\""
     end
 
@@ -104,7 +104,7 @@ defmodule AshXTDB.NestedSubqueryTest do
       {sql, _params} = Nested.build_subquery(nested_config, "t")
 
       assert sql =~ "NEST_MANY("
-      assert sql =~ "FROM tags n"
+      assert sql =~ "FROM \"tags\" n"
 
       assert sql =~
                "n.\"_id\" IN (SELECT th.\"tag_id\" FROM \"post_tags\" th WHERE th.\"post_id\" = t.\"_id\")"

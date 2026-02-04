@@ -110,9 +110,9 @@ defmodule AshXTDB.Connection do
   end
 
   @impl DBConnection
-  def handle_execute(%AshXTDB.SimpleQuery{statement: sql}, params, opts, state) do
+  def handle_execute(%AshXTDB.SimpleQuery{statement: sql_template}, params, opts, state) do
     # Inline parameters since XTDB doesn't support parameterized queries
-    sql = AshXTDB.SQL.inline_params(sql, params)
+    sql = AshXTDB.SQL.inline_params(sql_template, params)
     timeout = Keyword.get(opts, :timeout, 15_000)
 
     case do_simple_query(state, sql, timeout) do
@@ -443,12 +443,30 @@ defmodule AshXTDB.Connection do
   defp connection_error(reason, opts) do
     message =
       case reason do
-        :econnrefused -> "connection refused"
-        :timeout -> "connection timed out"
-        :closed -> "connection closed"
-        :nxdomain -> "hostname not found"
-        %Postgrex.Error{} = err -> Exception.message(err)
-        other -> inspect(other)
+        :econnrefused ->
+          "connection refused"
+
+        :timeout ->
+          "connection timed out"
+
+        :closed ->
+          "connection closed"
+
+        :nxdomain ->
+          "hostname not found"
+
+        %Postgrex.Error{postgres: %{message: msg, code: code}} ->
+          # Build our own message since Postgrex.Error.message/1 expects pg_code to be an atom
+          "[#{code}] #{msg}"
+
+        %Postgrex.Error{postgres: %{message: msg}} ->
+          msg
+
+        %Postgrex.Error{} = err ->
+          inspect(err)
+
+        other ->
+          inspect(other)
       end
 
     if Keyword.get(opts, :show_sensitive_data_on_connection_error, false) do

@@ -64,14 +64,23 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
 
         sync_result =
           if sync_function do
-            call_sync_function(sync_function, changeset.resource, action_type, sync_data, sync_context)
+            call_sync_function(
+              sync_function,
+              changeset.resource,
+              action_type,
+              sync_data,
+              sync_context
+            )
           else
             default_sync(history_resource, action_type, sync_data, sync_context)
           end
 
         case sync_result do
-          :ok -> {:ok, result}
-          {:error, reason} -> {:error, reason}
+          :ok ->
+            {:ok, result}
+
+          {:error, reason} ->
+            {:error, reason}
         end
       end
     end)
@@ -192,13 +201,10 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
       |> MapSet.new()
 
     # Extract matching attributes from the source record
+    # Filter out Ash.NotLoaded values - these occur when the record wasn't fully loaded
     record
     |> Map.from_struct()
-    |> Map.drop([:__meta__, :aggregates, :calculations, :__metadata__])
-    |> Enum.filter(fn {key, _value} ->
-      MapSet.member?(history_attrs, key)
-    end)
-    |> Map.new()
+    |> Map.take(history_attrs)
   end
 
   # ============================================================================

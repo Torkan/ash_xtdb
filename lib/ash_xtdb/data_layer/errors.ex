@@ -39,14 +39,12 @@ defmodule AshXTDB.DataLayer.Errors do
       # Connection errors
       "08000" ->
         Ash.Error.Unknown.exception(
-          error: "XTDB connection error: #{message}",
-          error_context: error
+          errors: ["XTDB connection error: #{message}"]
         )
 
       "08003" ->
         Ash.Error.Unknown.exception(
-          error: "XTDB connection does not exist: #{message}",
-          error_context: error
+          errors: ["XTDB connection does not exist: #{message}"]
         )
 
       # Syntax errors
@@ -104,7 +102,7 @@ defmodule AshXTDB.DataLayer.Errors do
   end
 
   def to_ash_error(%DBConnection.ConnectionError{message: message}) do
-    Ash.Error.Unknown.exception(error: "Database connection error: #{message}")
+    Ash.Error.Unknown.exception(errors: ["Database connection error: #{message}"])
   end
 
   # Already an Ash error - return as-is to avoid double-wrapping
@@ -115,7 +113,7 @@ defmodule AshXTDB.DataLayer.Errors do
       if is_exception(error) do
         Ash.Error.to_ash_error(error)
       else
-        Ash.Error.Unknown.exception(error: inspect(error))
+        Ash.Error.Unknown.exception(errors: [inspect(error)])
       end
     end
   end
@@ -125,7 +123,7 @@ defmodule AshXTDB.DataLayer.Errors do
   end
 
   def to_ash_error(error) do
-    Ash.Error.Unknown.exception(error: inspect(error))
+    Ash.Error.Unknown.exception(errors: [inspect(error)])
   end
 
   # Check if a module is an Ash error class

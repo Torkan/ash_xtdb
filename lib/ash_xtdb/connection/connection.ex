@@ -539,4 +539,24 @@ defmodule AshXTDB.Connection do
   defp ping_error do
     DBConnection.ConnectionError.exception("ping failed")
   end
+
+  # ============================================================================
+  # Test Helpers
+  # ============================================================================
+
+  @doc false
+  # Test helper to expose parse_row_description for unit testing
+  def parse_row_description_for_test(msg), do: parse_row_description(msg)
+
+  @doc false
+  # Test helper to expose parse_data_row for unit testing
+  def parse_data_row_for_test(msg), do: parse_data_row(msg)
+
+  @doc false
+  # Test helper to expose parse_error for unit testing
+  def parse_error_for_test(msg), do: parse_error(msg)
+
+  @doc false
+  # Test helper to expose connection_error for unit testing
+  def connection_error_for_test(reason, opts), do: connection_error(reason, opts)
 end

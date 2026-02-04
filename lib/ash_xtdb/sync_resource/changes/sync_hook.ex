@@ -198,10 +198,8 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
       history_resource
       |> Ash.Resource.Info.attributes()
       |> Enum.map(& &1.name)
-      |> MapSet.new()
 
     # Extract matching attributes from the source record
-    # Filter out Ash.NotLoaded values - these occur when the record wasn't fully loaded
     record
     |> Map.from_struct()
     |> Map.take(history_attrs)

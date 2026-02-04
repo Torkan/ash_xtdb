@@ -227,15 +227,30 @@ defmodule AshXTDB.NestedResult do
       true ->
         case Ash.Type.cast_input(type, value, constraints) do
           {:ok, casted} ->
-            casted
+            # Decode 4-byte UTF-8 escape sequences (XTDB workaround)
+            decode_utf8_workaround(casted)
 
           _ ->
             # Fall back to cast_stored for already-typed values
             case Ash.Type.cast_stored(type, value, constraints) do
-              {:ok, casted} -> casted
+              {:ok, casted} -> decode_utf8_workaround(casted)
               :error -> value
             end
         end
     end
   end
+
+  # Decode 4-byte UTF-8 escape sequences from XTDB workaround
+  defp decode_utf8_workaround(value) when is_binary(value) do
+    AshXTDB.UTF8Workaround.decode(value)
+  end
+
+  # Structs (DateTime, Date, etc.) should pass through unchanged
+  defp decode_utf8_workaround(value) when is_struct(value), do: value
+
+  defp decode_utf8_workaround(value) when is_map(value) do
+    AshXTDB.UTF8Workaround.decode_deep(value)
+  end
+
+  defp decode_utf8_workaround(value), do: value
 end

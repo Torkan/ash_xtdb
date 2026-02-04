@@ -152,130 +152,22 @@ defmodule AshXTDB.DataLayer do
   require Logger
   require Ash.Query
 
+  alias AshXTDB.DataLayer.BulkOperations
+  alias AshXTDB.DataLayer.Capabilities
+  alias AshXTDB.DataLayer.Errors
   alias AshXTDB.DataLayer.Info
-  alias AshXTDB.NestedResult
+  alias AshXTDB.DataLayer.LateralJoins
+  alias AshXTDB.DataLayer.Mutations
+  alias AshXTDB.DataLayer.ResultTransformer
+  alias AshXTDB.DataLayer.Transactions
   alias AshXTDB.SQL
 
   # ============================================================================
-  # Ash.DataLayer Callbacks
+  # Ash.DataLayer Callbacks - Capabilities
   # ============================================================================
 
   @impl Ash.DataLayer
-  def can?(resource, capability) do
-    do_can?(resource, capability)
-  end
-
-  # Phase 1: Basic CRUD
-  defp do_can?(_, :create), do: true
-  defp do_can?(_, :read), do: true
-  defp do_can?(_, :update), do: true
-  defp do_can?(_, :destroy), do: true
-
-  # Phase 2: Query features
-  defp do_can?(_, :filter), do: true
-  defp do_can?(_, :sort), do: true
-  defp do_can?(_, :limit), do: true
-  defp do_can?(_, :offset), do: true
-  defp do_can?(_, :select), do: true
-  defp do_can?(_, :distinct), do: true
-  defp do_can?(_, :boolean_filter), do: true
-  defp do_can?(_, :nested_expressions), do: true
-
-  # Filter expressions
-  defp do_can?(_, {:filter_expr, _}), do: true
-
-  # Sort on attribute
-  defp do_can?(_, {:sort, _}), do: true
-
-  # XTDB INSERT is naturally upsert
-  defp do_can?(_, :upsert), do: true
-
-  # Async engine support
-  defp do_can?(_, :async_engine), do: true
-
-  # Phase 3: Relationships - allow joins to other XTDB resources
-  defp do_can?(_, {:join, resource}) do
-    Ash.Resource.Info.data_layer(resource) == __MODULE__
-  end
-
-  defp do_can?(_, {:filter_relationship, _}), do: true
-
-  # Phase 4: Aggregates
-  defp do_can?(_, {:aggregate, :count}), do: true
-  defp do_can?(_, {:aggregate, :sum}), do: true
-  defp do_can?(_, {:aggregate, :avg}), do: true
-  defp do_can?(_, {:aggregate, :min}), do: true
-  defp do_can?(_, {:aggregate, :max}), do: true
-  defp do_can?(_, {:aggregate, :exists}), do: true
-  defp do_can?(_, {:aggregate, :first}), do: true
-  defp do_can?(_, {:aggregate, :list}), do: true
-  # Statistical aggregates
-  defp do_can?(_, {:aggregate, :stddev_pop}), do: true
-  defp do_can?(_, {:aggregate, :stddev_samp}), do: true
-  defp do_can?(_, {:aggregate, :var_pop}), do: true
-  defp do_can?(_, {:aggregate, :var_samp}), do: true
-  # Boolean aggregates
-  defp do_can?(_, {:aggregate, :bool_and}), do: true
-  defp do_can?(_, {:aggregate, :bool_or}), do: true
-
-  defp do_can?(_, {:query_aggregate, :count}), do: true
-  defp do_can?(_, {:query_aggregate, :sum}), do: true
-  defp do_can?(_, {:query_aggregate, :avg}), do: true
-  defp do_can?(_, {:query_aggregate, :min}), do: true
-  defp do_can?(_, {:query_aggregate, :max}), do: true
-  defp do_can?(_, {:query_aggregate, :exists}), do: true
-  defp do_can?(_, {:query_aggregate, :first}), do: true
-  defp do_can?(_, {:query_aggregate, :list}), do: true
-  # Statistical query aggregates
-  defp do_can?(_, {:query_aggregate, :stddev_pop}), do: true
-  defp do_can?(_, {:query_aggregate, :stddev_samp}), do: true
-  defp do_can?(_, {:query_aggregate, :var_pop}), do: true
-  defp do_can?(_, {:query_aggregate, :var_samp}), do: true
-  # Boolean query aggregates
-  defp do_can?(_, {:query_aggregate, :bool_and}), do: true
-  defp do_can?(_, {:query_aggregate, :bool_or}), do: true
-
-  # Aggregate relationships - allow aggregating over relationships to other XTDB resources
-  defp do_can?(_, {:aggregate_relationship, relationship}) do
-    Ash.Resource.Info.data_layer(relationship.destination) == __MODULE__
-  end
-
-  # Phase 5: Transactions
-  defp do_can?(_, :transact), do: true
-
-  # Phase 7: Bulk Operations
-  defp do_can?(_, :bulk_create), do: true
-  defp do_can?(_, :update_query), do: true
-  defp do_can?(_, :destroy_query), do: true
-
-  # Phase 8: Atomic Updates
-  # Supports expressions in UPDATE SET clause (e.g., counter = counter + 1)
-  defp do_can?(_, :expr_error), do: true
-  defp do_can?(_, {:atomic, :update}), do: true
-  defp do_can?(_, {:atomic, :upsert}), do: true
-
-  # Phase 9: Calculations
-  defp do_can?(_, :expression_calculation), do: true
-
-  # Phase 10: Multitenancy (attribute-based only)
-  defp do_can?(_, :multitenancy), do: true
-  defp do_can?(_, {:multitenancy, :attribute}), do: true
-  defp do_can?(_, :changeset_filter), do: true
-  # Context-based multitenancy (schemas) not supported - XTDB has no schemas
-  defp do_can?(_, {:multitenancy, :context}), do: false
-
-  # Lateral joins - supported via iteration when all resources use XTDB
-  defp do_can?(_resource, {:lateral_join, resources}) do
-    Enum.all?(resources, fn res ->
-      Ash.Resource.Info.data_layer(res) == __MODULE__
-    end)
-  end
-
-  # Not supported (XTDB limitations)
-  defp do_can?(_, {:lock, _}), do: false
-
-  # Default: not supported
-  defp do_can?(_, _), do: false
+  defdelegate can?(resource, capability), to: Capabilities
 
   @impl Ash.DataLayer
   def prefer_lateral_join_for_many_to_many?, do: false
@@ -317,11 +209,11 @@ defmodule AshXTDB.DataLayer do
 
     case repo.query(sql, params, opts) do
       {:ok, %Postgrex.Result{rows: rows, columns: columns}} ->
-        records_with_sql_calcs = rows_to_records(rows, columns, resource)
+        records_with_sql_calcs = ResultTransformer.rows_to_records(rows, columns, resource)
         add_calculations_to_records(records_with_sql_calcs, resource, query)
 
       {:error, error} ->
-        {:error, to_ash_error(error)}
+        {:error, Errors.to_ash_error(error)}
     end
   end
 
@@ -532,7 +424,7 @@ defmodule AshXTDB.DataLayer do
         {:ok, result}
 
       {:error, error} ->
-        {:error, to_ash_error(error)}
+        {:error, Errors.to_ash_error(error)}
     end
   end
 
@@ -592,15 +484,23 @@ defmodule AshXTDB.DataLayer do
   defp cast_aggregate_value(value, %{kind: kind})
        when kind in [:stddev_pop, :stddev_samp, :var_pop, :var_samp] do
     cond do
-      is_nil(value) -> nil
-      is_float(value) -> value
-      is_integer(value) -> value * 1.0
+      is_nil(value) ->
+        nil
+
+      is_float(value) ->
+        value
+
+      is_integer(value) ->
+        value * 1.0
+
       is_binary(value) ->
         case Float.parse(value) do
           {float, _} -> float
           :error -> value
         end
-      true -> value
+
+      true ->
+        value
     end
   end
 
@@ -628,1024 +528,61 @@ defmodule AshXTDB.DataLayer do
   # Lateral Join Operations (NEST_MANY/NEST_ONE)
   # ============================================================================
 
-  @doc """
-  Run a query with lateral join semantics using XTDB's NEST_MANY/NEST_ONE.
-
-  XTDB doesn't support the SQL LATERAL keyword, so we use NEST_MANY/NEST_ONE
-  correlated subqueries which return nested JSON structures. This provides
-  efficient single-query loading of relationships with limits, offsets, and
-  filters scoped to each parent.
-  """
   @impl Ash.DataLayer
-  # Simple relationship (1 join link) - e.g., has_many, belongs_to
-  def run_query_with_lateral_join(
-        query,
-        root_data,
-        destination_resource,
-        [{_source_query, _source_attribute, _destination_attribute, _relationship}] = path
-      ) do
-    run_nested_lateral_join(query, root_data, destination_resource, path)
-  end
+  defdelegate run_query_with_lateral_join(query, root_data, destination_resource, path),
+    to: LateralJoins
 
-  # Many-to-many relationship (2 join links) - e.g., through join table
-  def run_query_with_lateral_join(
-        query,
-        root_data,
-        destination_resource,
-        [
-          {_source_query, _source_attribute, _source_attr_on_join, _relationship},
-          {_through_query, _dest_attr_on_join, _destination_attribute, _through_relationship}
-        ] = path
-      ) do
-    run_nested_many_to_many_lateral_join(query, root_data, destination_resource, path)
-  end
-
-  # ============================================================================
-  # NEST_MANY/NEST_ONE Implementation
-  # ============================================================================
-
-  defp run_nested_lateral_join(
-         query,
-         root_data,
-         destination_resource,
-         [{source_query, source_attribute, destination_attribute, relationship}]
-       ) do
-    source_resource = source_query.resource
-    repo = Info.repo!(source_resource)
-    source_table = Info.table!(source_resource)
-    dest_table = Info.table!(destination_resource)
-    pkey_attrs = Ash.Resource.Info.primary_key(source_resource)
-
-    # Determine nest type based on relationship
-    nest_type =
-      case relationship.cardinality do
-        :one -> :nest_one
-        :many -> :nest_many
-      end
-
-    # Build nested subquery configuration
-    nested_config = %{
-      name: relationship.name,
-      type: nest_type,
-      resource: destination_resource,
-      table: dest_table,
-      correlation: {source_attribute, destination_attribute},
-      select: query.select,
-      filter: query.filter,
-      sort: query.sort,
-      limit: query.limit,
-      offset: query.offset
-    }
-
-    # Build filter for parent records
-    pkey_values = Enum.map(root_data, fn record -> Map.take(record, pkey_attrs) end)
-
-    parent_filter =
-      case pkey_attrs do
-        [pkey] ->
-          values = Enum.map(pkey_values, &Map.get(&1, pkey))
-          Ash.Filter.parse!(source_resource, [{pkey, [in: values]}])
-
-        _ ->
-          # Composite primary key
-          conditions = Enum.map(pkey_values, &Map.to_list/1)
-          Ash.Filter.parse!(source_resource, [or: conditions])
-      end
-
-    # Build query with nested subquery
-    parent_query = %SQL{
-      resource: source_resource,
-      domain: query.domain,
-      table: source_table,
-      filter: parent_filter,
-      context: query.context,
-      nested_subqueries: [nested_config]
-    }
-
-    {sql, params} = SQL.to_sql(parent_query, :select)
-
-    Logger.debug("AshXTDB NEST_#{String.upcase(to_string(nest_type))} SQL: #{sql}")
-
-    case repo.query(sql, params) do
-      {:ok, %Postgrex.Result{rows: rows, columns: columns}} ->
-        # Transform nested results
-        parent_records = NestedResult.transform_rows(rows, columns, [nested_config])
-
-        # Map _id to primary key for parent records (so extract_nested can find pkey)
-        parent_records =
-          Enum.map(parent_records, fn record ->
-            map_id_to_primary_key(record, source_resource)
-          end)
-
-        # Extract nested records with __lateral_join_source__
-        nested_records =
-          NestedResult.extract_nested(
-            parent_records,
-            relationship.name,
-            destination_resource,
-            source_resource
-          )
-
-        {:ok, nested_records}
-
-      {:error, error} ->
-        {:error, to_ash_error(error)}
-    end
-  end
-
-  defp run_nested_many_to_many_lateral_join(
-         query,
-         root_data,
-         destination_resource,
-         [
-           {source_query, source_attribute, source_attr_on_join, relationship},
-           {through_query, dest_attr_on_join, destination_attribute, _through_relationship}
-         ]
-       ) do
-    source_resource = source_query.resource
-    through_resource = through_query.resource
-    repo = Info.repo!(source_resource)
-    source_table = Info.table!(source_resource)
-    through_table = Info.table!(through_resource)
-    dest_table = Info.table!(destination_resource)
-    pkey_attrs = Ash.Resource.Info.primary_key(source_resource)
-
-    # For many-to-many, we use a subquery in the WHERE clause:
-    # NEST_MANY(SELECT ... FROM dest WHERE dest.id IN
-    #           (SELECT through.dest_id FROM through WHERE through.source_id = parent.id))
-    nested_config = %{
-      name: relationship.name,
-      type: :nest_many,
-      resource: destination_resource,
-      table: dest_table,
-      # For many-to-many, correlation is done via through table subquery
-      correlation: {:through_subquery, %{
-        through_table: through_table,
-        source_attr_on_join: source_attr_on_join,
-        dest_attr_on_join: dest_attr_on_join,
-        destination_attribute: destination_attribute,
-        source_attribute: source_attribute
-      }},
-      select: query.select,
-      filter: query.filter,
-      sort: query.sort,
-      limit: query.limit,
-      offset: query.offset
-    }
-
-    # Build filter for parent records
-    pkey_values = Enum.map(root_data, fn record -> Map.take(record, pkey_attrs) end)
-
-    parent_filter =
-      case pkey_attrs do
-        [pkey] ->
-          values = Enum.map(pkey_values, &Map.get(&1, pkey))
-          Ash.Filter.parse!(source_resource, [{pkey, [in: values]}])
-
-        _ ->
-          conditions = Enum.map(pkey_values, &Map.to_list/1)
-          Ash.Filter.parse!(source_resource, [or: conditions])
-      end
-
-    # Build query with nested subquery
-    parent_query = %SQL{
-      resource: source_resource,
-      domain: query.domain,
-      table: source_table,
-      filter: parent_filter,
-      context: query.context,
-      nested_subqueries: [nested_config]
-    }
-
-    {sql, params} = SQL.to_sql(parent_query, :select)
-
-    Logger.debug("AshXTDB NEST_MANY (M2M) SQL: #{sql}")
-
-    case repo.query(sql, params) do
-      {:ok, %Postgrex.Result{rows: rows, columns: columns}} ->
-        parent_records = NestedResult.transform_rows(rows, columns, [nested_config])
-
-        # Map _id to primary key for parent records (so extract_nested can find pkey)
-        parent_records =
-          Enum.map(parent_records, fn record ->
-            map_id_to_primary_key(record, source_resource)
-          end)
-
-        nested_records =
-          NestedResult.extract_nested(
-            parent_records,
-            relationship.name,
-            destination_resource,
-            source_resource
-          )
-
-        {:ok, nested_records}
-
-      {:error, error} ->
-        {:error, to_ash_error(error)}
-    end
-  end
-
-  # ============================================================================
-  # Aggregate Lateral Join (uses iteration since NEST_MANY doesn't support aggregates)
-  # ============================================================================
-
-  defp prepare_lateral_source_query(source_query, domain) do
-    source_query =
-      source_query
-      |> Ash.Query.unset(:load)
-      |> Ash.Query.unset(:page)
-      |> Ash.Query.set_context(%{private: %{internal?: true}})
-      |> Ash.Query.set_domain(domain)
-
-    {:ok, source_query}
-  end
-
-  defp filter_parents_by_root_data(source_query, root_data, source_attribute) do
-    pkey_attrs = Ash.Resource.Info.primary_key(source_query.resource)
-
-    if Enum.empty?(root_data) do
-      {:ok, []}
-    else
-      source_query =
-        case pkey_attrs do
-          [] ->
-            source_values = Enum.map(root_data, &Map.get(&1, source_attribute))
-            Ash.Query.filter(source_query, ^Ash.Expr.ref(source_attribute) in ^source_values)
-
-          [field] ->
-            pkey_values = Enum.map(root_data, &Map.get(&1, field))
-            Ash.Query.filter(source_query, ^Ash.Expr.ref(field) in ^pkey_values)
-
-          fields ->
-            filter = [
-              or:
-                Enum.map(root_data, fn record ->
-                  [and: Map.take(record, fields) |> Map.to_list()]
-                end)
-            ]
-
-            Ash.Query.do_filter(source_query, filter)
-        end
-
-      Ash.read(source_query, authorize?: false)
-    end
-  end
-
-  @doc """
-  Run an aggregate query with lateral join semantics.
-
-  Computes aggregates scoped to each parent record's relationship.
-  """
   @impl Ash.DataLayer
-  def run_aggregate_query_with_lateral_join(
-        query,
-        aggregates,
-        root_data,
-        _destination_resource,
-        [
-          {source_query, source_attribute, destination_attribute, _relationship}
-        ]
-      ) do
-    with {:ok, source_query} <- prepare_lateral_source_query(source_query, query.domain),
-         {:ok, filtered_parents} <-
-           filter_parents_by_root_data(source_query, root_data, source_attribute) do
-      run_simple_lateral_aggregate(
-        query,
-        aggregates,
-        filtered_parents,
-        source_attribute,
-        destination_attribute
-      )
-    end
-  end
-
-  def run_aggregate_query_with_lateral_join(
-        query,
-        aggregates,
-        root_data,
-        _destination_resource,
-        [
-          {source_query, source_attribute, source_attr_on_join, _relationship},
-          {through_query, dest_attr_on_join, destination_attribute, _through_relationship}
-        ]
-      ) do
-    with {:ok, source_query} <- prepare_lateral_source_query(source_query, query.domain),
-         {:ok, through_query} <- prepare_lateral_source_query(through_query, query.domain),
-         {:ok, filtered_parents} <-
-           filter_parents_by_root_data(source_query, root_data, source_attribute) do
-      run_many_to_many_lateral_aggregate(
-        query,
-        aggregates,
-        filtered_parents,
-        through_query,
-        source_attribute,
-        source_attr_on_join,
-        dest_attr_on_join,
-        destination_attribute
-      )
-    end
-  end
-
-  defp run_simple_lateral_aggregate(
-         query,
-         aggregates,
-         parents,
-         source_attribute,
-         destination_attribute
-       ) do
-    destination_resource = query.resource
-
-    Enum.reduce_while(parents, {:ok, []}, fn parent, {:ok, results} ->
-      correlation_value = Map.get(parent, source_attribute)
-      source_pkey = Ash.Resource.Info.primary_key(parent.__struct__)
-
-      if is_nil(correlation_value) do
-        # Return defaults for nil correlation
-        default_result =
-          aggregates
-          |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-          |> Map.new()
-          |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
-
-        {:cont, {:ok, [default_result | results]}}
-      else
-        correlated_filter =
-          Ash.Filter.parse!(destination_resource, [{destination_attribute, correlation_value}])
-
-        merged_filter =
-          if query.filter do
-            Ash.Filter.add_to_filter!(query.filter, correlated_filter)
-          else
-            correlated_filter
-          end
-
-        correlated_query = %{query | filter: merged_filter}
-
-        case run_aggregate_query(correlated_query, aggregates, destination_resource) do
-          {:ok, agg_result} ->
-            tagged_result =
-              Map.put(agg_result, :__lateral_join_source__, Map.take(parent, source_pkey))
-
-            {:cont, {:ok, [tagged_result | results]}}
-
-          {:error, error} ->
-            {:halt, {:error, error}}
-        end
-      end
-    end)
-  end
-
-  defp run_many_to_many_lateral_aggregate(
-         query,
-         aggregates,
-         parents,
-         through_query,
-         source_attribute,
-         source_attr_on_join,
-         dest_attr_on_join,
-         destination_attribute
-       ) do
-    destination_resource = query.resource
-
-    Enum.reduce_while(parents, {:ok, []}, fn parent, {:ok, results} ->
-      correlation_value = Map.get(parent, source_attribute)
-      source_pkey = Ash.Resource.Info.primary_key(parent.__struct__)
-
-      if is_nil(correlation_value) do
-        default_result =
-          aggregates
-          |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-          |> Map.new()
-          |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
-
-        {:cont, {:ok, [default_result | results]}}
-      else
-        through_query_filtered =
-          Ash.Query.filter(
-            through_query,
-            ^Ash.Expr.ref(source_attr_on_join) == ^correlation_value
-          )
-
-        case Ash.read(through_query_filtered, authorize?: false) do
-          {:ok, join_records} ->
-            if Enum.empty?(join_records) do
-              default_result =
-                aggregates
-                |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-                |> Map.new()
-                |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
-
-              {:cont, {:ok, [default_result | results]}}
-            else
-              dest_attr_values =
-                join_records
-                |> Enum.map(&Map.get(&1, dest_attr_on_join))
-                |> Enum.reject(&is_nil/1)
-                |> Enum.uniq()
-
-              if Enum.empty?(dest_attr_values) do
-                default_result =
-                  aggregates
-                  |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-                  |> Map.new()
-                  |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
-
-                {:cont, {:ok, [default_result | results]}}
-              else
-                dest_filter =
-                  Ash.Filter.parse!(destination_resource, [
-                    {destination_attribute, [in: dest_attr_values]}
-                  ])
-
-                merged_filter =
-                  if query.filter do
-                    Ash.Filter.add_to_filter!(query.filter, dest_filter)
-                  else
-                    dest_filter
-                  end
-
-                correlated_query = %{query | filter: merged_filter}
-
-                case run_aggregate_query(correlated_query, aggregates, destination_resource) do
-                  {:ok, agg_result} ->
-                    tagged_result =
-                      Map.put(agg_result, :__lateral_join_source__, Map.take(parent, source_pkey))
-
-                    {:cont, {:ok, [tagged_result | results]}}
-
-                  {:error, error} ->
-                    {:halt, {:error, error}}
-                end
-              end
-            end
-
-          {:error, error} ->
-            {:halt, {:error, error}}
-        end
-      end
-    end)
-  end
+  defdelegate run_aggregate_query_with_lateral_join(
+                query,
+                aggregates,
+                root_data,
+                destination_resource,
+                path
+              ),
+              to: LateralJoins
 
   # ============================================================================
   # Mutation Operations
   # ============================================================================
 
   @impl Ash.DataLayer
-  def create(resource, changeset) do
-    repo = Info.repo!(resource)
-    table = Info.table!(resource)
-
-    # Build record from changeset attributes
-    record = build_record_from_changeset(changeset, resource)
-    {sql, params} = SQL.build_insert(table, record, resource)
-
-    Logger.debug("AshXTDB INSERT: #{sql} with params: #{inspect(params)}")
-
-    case repo.query(sql, params) do
-      {:ok, _result} ->
-        # Map _id back to the primary key attribute for the struct
-        result_attrs = map_id_to_primary_key(record, resource)
-        {:ok, struct(resource, result_attrs)}
-
-      {:error, error} ->
-        {:error, to_ash_error(error)}
-    end
-  end
+  defdelegate create(resource, changeset), to: Mutations
 
   @impl Ash.DataLayer
-  def update(resource, changeset) do
-    repo = Info.repo!(resource)
-    table = Info.table!(resource)
-
-    # Get the primary key value(s) for WHERE clause
-    pkey = primary_key_value(changeset.data, resource)
-
-    # Get changed attributes and atomics
-    changes = get_changes(changeset)
-    atomics = changeset.atomics || []
-
-    if map_size(changes) == 0 and atomics == [] do
-      # No changes, return existing record
-      {:ok, changeset.data}
-    else
-      {sql, params} = SQL.build_update(table, pkey, changes, atomics, resource)
-
-      Logger.debug("AshXTDB UPDATE: #{sql} with params: #{inspect(params)}")
-
-      case repo.query(sql, params) do
-        {:ok, _result} ->
-          # Note: XTDB doesn't allow SELECTs in DML transactions, so we can't
-          # refetch to get computed atomic values. We return the record with
-          # regular changes applied. For atomics, the caller must refetch.
-          updated = Map.merge(changeset.data, changes)
-          {:ok, updated}
-
-        {:error, error} ->
-          {:error, to_ash_error(error)}
-      end
-    end
-  end
+  defdelegate update(resource, changeset), to: Mutations
 
   @impl Ash.DataLayer
-  def destroy(resource, changeset) do
-    repo = Info.repo!(resource)
-    table = Info.table!(resource)
-
-    pkey = primary_key_value(changeset.data, resource)
-    {sql, params} = SQL.build_delete(table, pkey, resource)
-
-    Logger.debug("AshXTDB DELETE: #{sql} with params: #{inspect(params)}")
-
-    case repo.query(sql, params) do
-      {:ok, _result} ->
-        :ok
-
-      {:error, error} ->
-        {:error, to_ash_error(error)}
-    end
-  end
-
-  # ============================================================================
-  # Upsert
-  # ============================================================================
+  defdelegate destroy(resource, changeset), to: Mutations
 
   @impl Ash.DataLayer
-  def upsert(resource, changeset, _keys) do
-    # XTDB INSERT is naturally an upsert based on _id
-    create(resource, changeset)
-  end
+  defdelegate upsert(resource, changeset, keys), to: Mutations
 
   # ============================================================================
   # Bulk Operations
   # ============================================================================
 
   @impl Ash.DataLayer
-  def bulk_create(resource, stream, options) do
-    repo = Info.repo!(resource)
-    table = Info.table!(resource)
-    options = options || %{}
-    return_records? = Map.get(options, :return_records?, false)
-
-    # Convert stream to list and apply attributes to get full records
-    changesets = Enum.to_list(stream)
-
-    # Get attribute names (not relationships)
-    attr_names = resource |> Ash.Resource.Info.attributes() |> Enum.map(& &1.name)
-
-    records_with_changesets =
-      changesets
-      |> Enum.reduce_while({:ok, []}, fn changeset, {:ok, acc} ->
-        case Ash.Changeset.apply_attributes(changeset) do
-          {:ok, record} ->
-            # Convert struct to map, keeping only attributes (not relationships)
-            record_map =
-              record
-              |> Map.from_struct()
-              |> Map.take(attr_names)
-              |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-              |> Map.new()
-              |> map_primary_key_to_id(resource)
-
-            {:cont, {:ok, [{record_map, changeset} | acc]}}
-
-          {:error, error} ->
-            {:halt, {:error, error}}
-        end
-      end)
-
-    case records_with_changesets do
-      {:error, error} ->
-        {:error, error}
-
-      {:ok, []} ->
-        if return_records?, do: {:ok, []}, else: :ok
-
-      {:ok, records_with_changesets} ->
-        # Reverse to maintain order
-        records_with_changesets = Enum.reverse(records_with_changesets)
-        records = Enum.map(records_with_changesets, fn {record, _} -> record end)
-
-        # Build batch INSERT SQL
-        {sql, params} = SQL.build_bulk_insert(table, records, resource)
-
-        Logger.debug("AshXTDB BULK INSERT: #{sql} with params: #{inspect(params)}")
-
-        # XTDB requires inlined params for inserts
-        inlined_sql = AshXTDB.SQL.inline_params(sql, params)
-
-        case repo.query(inlined_sql, []) do
-          {:ok, _result} ->
-            if return_records? do
-              # Map records back to structs with bulk metadata
-              result_records =
-                Enum.map(records_with_changesets, fn {record, changeset} ->
-                  attrs = map_id_to_primary_key(record, resource)
-                  result = struct(resource, attrs)
-                  # Add bulk operation metadata from changeset context
-                  Ash.Actions.Helpers.Bulk.put_metadata(result, changeset)
-                end)
-
-              {:ok, result_records}
-            else
-              :ok
-            end
-
-          {:error, error} ->
-            {:error, to_ash_error(error)}
-        end
-    end
-  end
+  defdelegate bulk_create(resource, stream, options), to: BulkOperations
 
   @impl Ash.DataLayer
-  def update_query(query, changeset, resource, options) do
-    repo = Info.repo!(resource)
-    table = Info.table!(resource)
-    return_records? = Map.get(options, :return_records?, false)
-
-    # Get the changes and atomics from changeset
-    changes = get_changes(changeset)
-    atomics = changeset.atomics || []
-
-    if map_size(changes) == 0 and atomics == [] do
-      if return_records?, do: {:ok, []}, else: :ok
-    else
-      # Build UPDATE with WHERE from filter, including atomics
-      {sql, params} = SQL.build_update_query(table, changes, atomics, query, resource)
-
-      Logger.debug("AshXTDB UPDATE QUERY: #{sql} with params: #{inspect(params)}")
-
-      # Inline params for XTDB
-      inlined_sql = AshXTDB.SQL.inline_params(sql, params)
-
-      case repo.query(inlined_sql, []) do
-        {:ok, _result} ->
-          # XTDB doesn't allow SELECT in DML transactions, so we can't return
-          # the actual updated records. Return empty list when return_records? is true.
-          # Ash will re-fetch if needed.
-          if return_records? do
-            {:ok, []}
-          else
-            :ok
-          end
-
-        {:error, error} ->
-          {:error, to_ash_error(error)}
-      end
-    end
-  end
+  defdelegate update_query(query, changeset, resource, options), to: BulkOperations
 
   @impl Ash.DataLayer
-  def destroy_query(query, _changeset, resource, options) do
-    repo = Info.repo!(resource)
-    table = Info.table!(resource)
-    return_records? = Map.get(options, :return_records?, false)
-
-    # Build DELETE with WHERE from filter
-    {sql, params} = SQL.build_destroy_query(table, query, resource)
-
-    Logger.debug("AshXTDB DESTROY QUERY: #{sql} with params: #{inspect(params)}")
-
-    # Inline params for XTDB
-    inlined_sql = AshXTDB.SQL.inline_params(sql, params)
-
-    case repo.query(inlined_sql, []) do
-      {:ok, _result} ->
-        # XTDB doesn't allow SELECT in DML transactions, so we can't return
-        # the actual destroyed records. Return empty list when return_records? is true.
-        if return_records? do
-          {:ok, []}
-        else
-          :ok
-        end
-
-      {:error, error} ->
-        {:error, to_ash_error(error)}
-    end
-  end
+  defdelegate destroy_query(query, changeset, resource, options), to: BulkOperations
 
   # ============================================================================
   # Transaction Support
   # ============================================================================
 
   @impl Ash.DataLayer
-  def transaction(resource, func, _timeout, _reason) do
-    repo = Info.repo!(resource)
-
-    if in_transaction?(resource) do
-      # Already in a transaction, just run the function
-      {:ok, func.()}
-    else
-      # Use DBConnection transaction with proper pooling
-      # We wrap in try/rescue to catch exceptions and convert to error tuples
-      try do
-        case repo.transaction(fn ->
-               try do
-                 func.()
-               catch
-                 :throw, {:ash_rollback, value} ->
-                   repo.rollback({:ash_rollback, value})
-               end
-             end) do
-          {:ok, result} ->
-            {:ok, result}
-
-          {:error, {:ash_rollback, value}} ->
-            {:error, value}
-
-          {:error, %DBConnection.ConnectionError{} = error} ->
-            {:error, to_ash_error(error)}
-
-          {:error, error} ->
-            {:error, to_ash_error(error)}
-        end
-      rescue
-        e ->
-          {:error, Ash.Error.to_ash_error(e, __STACKTRACE__)}
-      end
-    end
-  end
+  defdelegate transaction(resource, func, timeout, reason), to: Transactions
 
   @impl Ash.DataLayer
-  def rollback(resource, value) do
-    repo = Info.repo!(resource)
-    repo.rollback(value)
-  end
+  defdelegate rollback(resource, value), to: Transactions
 
   @impl Ash.DataLayer
-  def in_transaction?(resource) do
-    repo = Info.repo!(resource)
-    repo.in_transaction?()
-  end
-
-  # ============================================================================
-  # Private Helpers
-  # ============================================================================
-
-  defp rows_to_records(rows, columns, resource) do
-    # Use String.to_atom since XTDB may return synthetic column names
-    columns = Enum.map(columns, &String.to_atom/1)
-
-    # Separate calculation columns (prefixed with __calc_) from regular columns
-    {calc_columns, attr_columns} =
-      Enum.split_with(columns, fn col ->
-        col |> Atom.to_string() |> String.starts_with?("__calc_")
-      end)
-
-    # Get attribute info for type casting
-    attr_types = get_attribute_types(resource)
-
-    Enum.map(rows, fn row ->
-      # Build a map of column -> value
-      col_values = Enum.zip(columns, row) |> Map.new()
-
-      # Extract and cast regular attributes
-      attrs =
-        attr_columns
-        |> Enum.map(fn col ->
-          val = Map.get(col_values, col)
-          {col, cast_value(val, Map.get(attr_types, col))}
-        end)
-        |> Map.new()
-
-      # Map _id back to the primary key attribute
-      attrs = map_id_to_primary_key(attrs, resource)
-
-      # Extract SQL-calculated values
-      sql_calculations =
-        calc_columns
-        |> Enum.map(fn col ->
-          # Strip __calc_ prefix to get the original calculation name
-          calc_name =
-            col
-            |> Atom.to_string()
-            |> String.replace_prefix("__calc_", "")
-            |> String.to_atom()
-
-          {calc_name, Map.get(col_values, col)}
-        end)
-        |> Map.new()
-
-      # Create struct with __sql_calculations__ metadata
-      record = struct(resource, attrs)
-
-      # Store SQL calculations in a metadata field that add_calculations_to_records can use
-      {record, sql_calculations}
-    end)
-  end
-
-  defp get_attribute_types(resource) do
-    resource
-    |> Ash.Resource.Info.attributes()
-    |> Enum.map(fn attr ->
-      type = Ash.Type.get_type(attr.type)
-      # Initialize constraints to get proper defaults (e.g., precision for datetime types)
-      constraints = init_constraints(type, attr.constraints)
-      {attr.name, %{type: type, constraints: constraints}}
-    end)
-    |> Map.new()
-    |> Map.put(:_id, %{type: Ash.Type.String, constraints: []})
-  end
-
-  defp cast_value(nil, _type_info), do: nil
-  defp cast_value(value, nil), do: value
-
-  defp cast_value(value, %{type: type, constraints: constraints}) do
-    # XTDB via pgwire returns raw values that need proper casting:
-    # - Atoms come as strings -> need String.to_atom
-    # - Booleans may come as "t"/"f" strings -> need explicit conversion
-    # - Maps may come as JSON strings -> cast_input handles this
-    # - DateTimes come as strings -> cast_input handles this
-    cond do
-      # Boolean type with string value - XTDB often returns "t"/"f"
-      type == Ash.Type.Boolean and is_binary(value) ->
-        coerce_boolean(value)
-
-      # Atom type with string value - convert string to atom
-      type == Ash.Type.Atom and is_binary(value) ->
-        String.to_atom(value)
-
-      # Try cast_input first (handles JSON strings for maps, datetime strings, etc.)
-      true ->
-        case Ash.Type.cast_input(type, value, constraints) do
-          {:ok, casted} ->
-            casted
-
-          _ ->
-            # Fall back to cast_stored for already-typed values
-            case Ash.Type.cast_stored(type, value, constraints) do
-              {:ok, casted} -> casted
-              :error -> value
-            end
-        end
-    end
-  end
-
-  defp cast_value(value, _type_info), do: value
-
-  # Coerce XTDB boolean string representations to Elixir booleans
-  defp coerce_boolean(value) when value in ["t", "true", "TRUE", "1", "yes", "YES"], do: true
-  defp coerce_boolean(value) when value in ["f", "false", "FALSE", "0", "no", "NO", ""], do: false
-  defp coerce_boolean(value), do: value
-
-  defp init_constraints(type, constraints) do
-    if function_exported?(type, :init, 1) do
-      case type.init(constraints) do
-        {:ok, initialized} -> initialized
-        _ -> constraints
-      end
-    else
-      constraints
-    end
-  end
-
-  defp map_id_to_primary_key(attrs, resource) do
-    case Ash.Resource.Info.primary_key(resource) do
-      [pkey] when pkey != :_id ->
-        case Map.pop(attrs, :_id) do
-          {nil, attrs} -> attrs
-          {id_value, attrs} -> Map.put(attrs, pkey, id_value)
-        end
-
-      _ ->
-        attrs
-    end
-  end
-
-  defp build_record_from_changeset(changeset, resource) do
-    # Get all attributes that have values
-    # Use attributes map which contains all attribute values including defaults and primary key
-    attrs =
-      if is_map(changeset.attributes) and map_size(changeset.attributes) > 0 do
-        changeset.attributes
-      else
-        # Fallback: extract attributes from the changeset using Ash API
-        resource
-        |> Ash.Resource.Info.attributes()
-        |> Enum.reduce(%{}, fn attr, acc ->
-          case Ash.Changeset.get_attribute(changeset, attr.name) do
-            nil -> acc
-            value -> Map.put(acc, attr.name, value)
-          end
-        end)
-      end
-
-    attrs = Map.new(attrs)
-
-    # Map primary key to _id for XTDB
-    map_primary_key_to_id(attrs, resource)
-  end
-
-  defp map_primary_key_to_id(attrs, resource) do
-    case Ash.Resource.Info.primary_key(resource) do
-      [pkey] when pkey != :_id ->
-        case Map.pop(attrs, pkey) do
-          {nil, attrs} -> attrs
-          {pkey_value, attrs} -> Map.put(attrs, :_id, pkey_value)
-        end
-
-      _ ->
-        attrs
-    end
-  end
-
-  defp primary_key_value(record, resource) do
-    pkey_attrs = Ash.Resource.Info.primary_key(resource)
-
-    Map.new(pkey_attrs, fn attr ->
-      {attr, Map.get(record, attr)}
-    end)
-  end
-
-  defp get_changes(changeset) do
-    changeset.attributes
-    |> Map.new()
-  end
-
-  # ============================================================================
-  # Error Handling
-  # ============================================================================
-
-  defp to_ash_error(%Postgrex.Error{postgres: %{code: code, message: message}} = error) do
-    case code do
-      # Connection errors
-      "08000" ->
-        Ash.Error.Unknown.exception(
-          error: "XTDB connection error: #{message}",
-          error_context: error
-        )
-
-      "08003" ->
-        Ash.Error.Unknown.exception(
-          error: "XTDB connection does not exist: #{message}",
-          error_context: error
-        )
-
-      # Syntax errors
-      "42601" ->
-        Ash.Error.Invalid.exception(
-          errors: [
-            Ash.Error.Query.InvalidQuery.exception(
-              query: nil,
-              message: "SQL syntax error: #{message}"
-            )
-          ]
-        )
-
-      # Undefined table
-      "42P01" ->
-        Ash.Error.Invalid.exception(
-          errors: [
-            Ash.Error.Query.InvalidQuery.exception(
-              query: nil,
-              message: "Table does not exist: #{message}"
-            )
-          ]
-        )
-
-      # Undefined column
-      "42703" ->
-        Ash.Error.Invalid.exception(
-          errors: [
-            Ash.Error.Query.InvalidQuery.exception(
-              query: nil,
-              message: "Column does not exist: #{message}"
-            )
-          ]
-        )
-
-      # Data type mismatch
-      "42804" ->
-        Ash.Error.Invalid.exception(
-          errors: [
-            Ash.Error.Query.InvalidQuery.exception(
-              query: nil,
-              message: "Data type mismatch: #{message}"
-            )
-          ]
-        )
-
-      # Default: convert to Ash error
-      _ ->
-        Ash.Error.to_ash_error(error)
-    end
-  end
-
-  defp to_ash_error(%Postgrex.Error{} = error) do
-    Ash.Error.to_ash_error(error)
-  end
-
-  defp to_ash_error(%DBConnection.ConnectionError{message: message}) do
-    Ash.Error.Unknown.exception(error: "Database connection error: #{message}")
-  end
-
-  defp to_ash_error(error) when is_exception(error) do
-    Ash.Error.to_ash_error(error)
-  end
-
-  defp to_ash_error(error) do
-    Ash.Error.Unknown.exception(error: error)
-  end
+  defdelegate in_transaction?(resource), to: Transactions
 
   # ============================================================================
   # Telemetry

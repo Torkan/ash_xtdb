@@ -11,7 +11,8 @@ defmodule AshXTDB.MixProject do
   def cli do
     [
       preferred_envs: [
-        tidewave: :test
+        tidewave: :test,
+        test: :test
       ]
     ]
   end
@@ -81,6 +82,10 @@ defmodule AshXTDB.MixProject do
         "compile --warnings-as-errors",
         "credo --strict",
         "dialyzer"
+      ],
+      test: [
+        "ash_xtdb.reset",
+        "test"
       ],
       tidewave:
         "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4032) end)'"

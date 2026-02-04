@@ -9,3 +9,5 @@ config :ash_xtdb, AshXTDB.TestRepo,
   database: "ash_xtdb_test"
 
 config :logger, level: :warning
+
+config :ash_xtdb, repos: [AshXTDB.TestRepo]

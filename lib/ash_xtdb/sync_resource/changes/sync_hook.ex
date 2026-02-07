@@ -3,25 +3,27 @@
 
 defmodule AshXTDB.SyncResource.Changes.SyncHook do
   @moduledoc """
-  A change that adds an after_action hook to sync data to XTDB.
+  A change that adds an after_action hook to enqueue XTDB sync.
 
   This change is automatically added by the `AshXTDB.SyncResource` transformer.
-  It can also be used manually for fine-grained control over syncing behavior.
+  It dispatches sync operations through the configured `AshXTDB.SyncAdapter`
+  (default: Oban-based async sync).
 
   ## Options
 
   - `:action_type` - The type of action (`:create`, `:update`, or `:destroy`)
   - `:history_resource` - The XTDB History resource to sync to
-  - `:sync_function` - Optional custom function for syncing (overrides default behavior)
+  - `:sync_function` - Optional custom function for syncing (overrides adapter dispatch)
   - `:valid_from` - Optional override for valid_from timestamp
   - `:valid_to` - Optional override for valid_to timestamp
 
-  ## Default Sync Behavior
+  ## Sync Flow
 
-  When no `sync_function` is provided, the change performs direct sync:
-
-  - `:create` / `:update` → Calls the `:sync` action on the history resource (upsert)
-  - `:destroy` → Calls the `:delete_sync` action on the history resource
+  1. After-action hook fires (inside the PostgreSQL transaction)
+  2. Hook builds sync data and context
+  3. If `sync_function` is configured, calls it directly (escape hatch)
+  4. Otherwise, dispatches through the configured `AshXTDB.SyncAdapter`
+  5. For the Oban adapter, this inserts a job in `oban_jobs` — same PG transaction
 
   ## Manual Usage
 
@@ -42,8 +44,6 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
 
   @impl true
   def atomic(changeset, opts, context) do
-    # This change adds an after_action hook, so we call change/3 from atomic/3
-    # to ensure the hook is registered regardless of atomic vs non-atomic execution
     {:ok, change(changeset, opts, context)}
   end
 
@@ -72,7 +72,7 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
               sync_context
             )
           else
-            default_sync(history_resource, action_type, sync_data, sync_context)
+            dispatch_to_adapter(history_resource, action_type, sync_data, sync_context)
           end
 
         case sync_result do
@@ -91,8 +91,6 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
   end
 
   defp build_sync_context(changeset, context, valid_from_opt, valid_to_opt) do
-    # Get valid_from/valid_to from options (for manual usage with arg())
-    # or from changeset context (for programmatic override)
     valid_from =
       case valid_from_opt do
         {:_arg, arg_name} -> Ash.Changeset.get_argument(changeset, arg_name)
@@ -115,7 +113,6 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
   end
 
   defp build_sync_data(:destroy, result, changeset) do
-    # For destroy, return a map with just the primary key field(s)
     pkey_fields = Ash.Resource.Info.primary_key(changeset.resource)
 
     Map.new(pkey_fields, fn field ->
@@ -124,89 +121,34 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
   end
 
   defp build_sync_data(_action_type, result, _changeset) do
-    # For create/update, return the full record
     result
   end
 
   # ============================================================================
-  # Default Direct Sync
+  # Adapter Dispatch
   # ============================================================================
 
-  defp default_sync(history_resource, :destroy, data, context) do
-    # For destroy, delete the record from XTDB
-    # This sets _valid_to to now, preserving history
-    pkey_fields = Ash.Resource.Info.primary_key(history_resource)
+  defp dispatch_to_adapter(history_resource, action_type, data, context) do
+    {adapter, opts} = get_sync_adapter()
+    adapter.enqueue_sync(history_resource, action_type, data, context, opts)
+  end
 
-    # Build a filter for the primary key
-    pkey_filter =
-      Enum.map(pkey_fields, fn field ->
-        {field, Map.get(data, field)}
-      end)
+  @doc false
+  def get_sync_adapter do
+    case Application.get_env(:ash_xtdb, :sync_adapter) do
+      {module, opts} when is_atom(module) ->
+        {module, opts}
 
-    # Build options from context (tenant, actor)
-    opts =
-      [return_errors?: true]
-      |> then(fn opts ->
-        if context.tenant, do: Keyword.put(opts, :tenant, context.tenant), else: opts
-      end)
-      |> then(fn opts ->
-        if context.actor, do: Keyword.put(opts, :actor, context.actor), else: opts
-      end)
+      module when is_atom(module) and not is_nil(module) ->
+        {module, []}
 
-    case history_resource
-         |> Ash.Query.filter(^pkey_filter)
-         |> Ash.bulk_destroy(:delete_sync, %{}, opts) do
-      %Ash.BulkResult{status: :success} ->
-        :ok
-
-      %Ash.BulkResult{errors: errors} ->
-        Logger.error("XTDB sync delete failed: #{inspect(errors)}")
-        {:error, "XTDB sync failed: #{inspect(errors)}"}
+      nil ->
+        {AshXTDB.SyncAdapters.Oban, []}
     end
   end
 
-  defp default_sync(history_resource, _action_type, record, context) do
-    # For create/update, upsert the record using the :sync action
-    # Extract attribute values from the source record
-    attrs = extract_syncable_attributes(record, history_resource)
-
-    # Build options from context (tenant, actor)
-    opts =
-      []
-      |> then(fn opts ->
-        if context.tenant, do: Keyword.put(opts, :tenant, context.tenant), else: opts
-      end)
-      |> then(fn opts ->
-        if context.actor, do: Keyword.put(opts, :actor, context.actor), else: opts
-      end)
-
-    case history_resource
-         |> Ash.Changeset.for_create(:sync, attrs, opts)
-         |> Ash.create(opts) do
-      {:ok, _} ->
-        :ok
-
-      {:error, error} ->
-        Logger.error("XTDB sync failed: #{inspect(error)}")
-        {:error, error}
-    end
-  end
-
-  defp extract_syncable_attributes(record, history_resource) do
-    # Get the attributes that the history resource accepts for sync
-    history_attrs =
-      history_resource
-      |> Ash.Resource.Info.attributes()
-      |> Enum.map(& &1.name)
-
-    # Extract matching attributes from the source record
-    record
-    |> Map.from_struct()
-    |> Map.take(history_attrs)
-  end
-
   # ============================================================================
-  # Custom Sync Function
+  # Custom Sync Function (escape hatch, backward compat)
   # ============================================================================
 
   defp call_sync_function({mod, fun, args}, resource, action_type, data, context) do

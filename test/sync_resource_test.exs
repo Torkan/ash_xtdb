@@ -241,7 +241,6 @@ defmodule AshXTDB.SyncResourceTest do
     end
 
     test "history_resource defaults to <Resource>.History" do
-      # SyncedResource doesn't set history_resource, so it should default
       assert AshXTDB.SyncResource.Info.history_resource(SyncedResource) ==
                AshXTDB.SyncResourceTest.SyncedResource.History
     end

@@ -6,12 +6,11 @@ defmodule AshXTDB.SyncResource do
   An Ash extension that automatically syncs resource changes to XTDB.
 
   This extension adds after_action hooks to create, update, and destroy actions
-  that sync data to a corresponding XTDB History resource. The sync runs within
-  the same transaction as the action, ensuring consistency.
+  that dispatch sync operations through a configured `AshXTDB.SyncAdapter`.
+  By default, this uses the Oban adapter which inserts a job inside the same
+  PostgreSQL transaction — ensuring the job only exists for committed data.
 
   ## Basic Usage
-
-  By default, the extension syncs to `<Resource>.History`:
 
       defmodule MyApp.User do
         use Ash.Resource,
@@ -24,33 +23,29 @@ defmodule AshXTDB.SyncResource do
         end
       end
 
+  ## Sync Adapter Configuration
+
+  Configure which adapter handles the sync dispatch:
+
+      # Default: Oban adapter (async, eventual consistency)
+      config :ash_xtdb,
+        sync_adapter: {AshXTDB.SyncAdapters.Oban, oban: MyApp.Oban, queue: :xtdb_sync}
+
+  See `AshXTDB.SyncAdapter` for implementing custom adapters.
+
   ## Custom History Resource
 
       xtdb_sync do
         history_resource MyApp.UserHistory
       end
 
-  ## Custom Sync Function
+  ## Custom Sync Function (escape hatch)
 
-  For advanced use cases (e.g., Oban jobs), provide a custom sync function:
+  For full control, provide a custom sync function that bypasses the adapter:
 
       xtdb_sync do
         sync_function &MyApp.XTDBSync.run_sync/4
       end
-
-  The sync function receives four arguments:
-
-      @spec run_sync(
-        resource :: module(),
-        action_type :: :create | :update | :destroy,
-        result :: Ash.Resource.record() | map(),
-        context :: map()
-      ) :: :ok | {:error, term()}
-
-  ## How Syncing Works
-
-  - `:create` / `:update` → Upserts a record into the History resource
-  - `:destroy` → Deletes the record from XTDB (sets `_valid_to` to now, preserving history)
 
   ## Escape Hatches
 

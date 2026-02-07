@@ -62,6 +62,7 @@ defmodule AshXTDB.MixProject do
       {:spark, "~> 2.0"},
       {:postgrex, "~> 0.19"},
       {:jason, "~> 1.0"},
+      {:oban, "~> 2.18", optional: true},
 
       # Dev/test
       {:ex_doc, "~> 0.30", only: :dev, runtime: false},

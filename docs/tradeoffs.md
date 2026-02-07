@@ -228,9 +228,11 @@
 - May surprise developers expecting traditional SQL
 
 #### 9. **Transaction Limitations**
-- Mid-transaction writes not visible to reads within same transaction
-- Bulk operations can't return updated records in transactions
-- Nested transactions reuse outer (no sub-transactions)
+- XTDB does not support multi-statement atomic transactions via pgwire
+- `BEGIN`/`COMMIT` causes protocol errors when mixing `SELECT` and DML
+- AshXTDB uses `repo.run()` (connection checkout) not `repo.transaction()` — no rollback
+- Each DML statement auto-commits immediately
+- Nested "transactions" reuse the outer connection (no sub-transactions)
 
 #### 10. **Expression-Based Calculations**
 - Evaluated in Elixir after record fetch (not in database)

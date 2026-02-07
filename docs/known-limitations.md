@@ -4,16 +4,31 @@ This document tracks limitations in the AshXTDB implementation.
 
 ## XTDB-Specific Limitations (Not Fixable)
 
-### 1. SELECT Not Allowed in DML Transactions
+### 1. No Multi-Statement Transactions
 
 **Status:** XTDB Limitation (Not Fixable)
 **Discovered:** 2024 during atomic update implementation
 **Severity:** Medium
 
 **Description:**
-XTDB does not allow SELECT queries within DML (INSERT/UPDATE/DELETE) transactions. This means we cannot refetch a record immediately after an atomic update within the same transaction.
+XTDB's pgwire protocol does not support multi-statement atomic transactions. Specifically:
 
-**Impact:**
+- `BEGIN`/`COMMIT` blocks reject any `SELECT` mixed with DML (`INSERT`/`UPDATE`/`DELETE`)
+- There is no way to atomically execute multiple statements and roll them all back on failure
+- Each DML statement executes and commits immediately
+
+**Consequence — `repo.run()` instead of `repo.transaction()`:**
+
+AshXTDB's `transaction/4` implementation uses `repo.run()` (which checks out a connection from the pool without sending `BEGIN`/`COMMIT`) rather than `repo.transaction()` (which sends `BEGIN`/`COMMIT` and causes protocol errors).
+
+This means:
+- `Ash.transaction([Resource], fn -> ... end)` provides a **consistent connection** for the duration of the callback, but does **not** provide atomicity
+- If an error occurs partway through, earlier operations are **not rolled back** — they already committed
+- `rollback/2` raises an error explaining this limitation
+
+This is the honest model: XTDB operations are effectively auto-committed. For cross-database consistency (e.g., PostgreSQL + XTDB), use the async sync pattern with Oban jobs inserted in the PostgreSQL transaction (see `AshXTDB.SyncAdapter`).
+
+**Impact on atomic updates:**
 After atomic updates, the returned record contains the input values, not the computed atomic values. Callers must explicitly refetch if they need the updated values.
 
 **Example:**

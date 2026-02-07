@@ -5,93 +5,50 @@ defmodule AshXTDB.DataLayer.Transactions do
   @moduledoc """
   Transaction support for XTDB data layer.
 
-  Provides transaction management using DBConnection's transaction support,
-  with proper handling of nested transactions and rollbacks.
+  XTDB does not support multi-statement atomic transactions via pgwire.
+  Sending `BEGIN`/`COMMIT` causes protocol errors when mixing `SELECT` and DML.
 
-  ## Usage
-
-  Transactions are typically managed through Ash's action lifecycle, but can
-  also be used directly:
-
-      AshXTDB.DataLayer.Transactions.transaction(resource, fn ->
-        # operations here
-      end)
-
-  ## Nested Transactions
-
-  If a transaction function is called while already inside a transaction,
-  the inner function is simply executed (no nested transaction is created).
-  This matches the behavior of most database systems.
+  Instead of `repo.transaction()`, we use `repo.run()` which checks out a
+  connection from the pool without starting a database transaction. This gives
+  Ash a consistent connection for the duration of the "transaction" callback
+  without pretending XTDB supports real transactions.
 
   ## Rollback
 
-  Use `rollback/2` to abort the current transaction:
-
-      AshXTDB.DataLayer.Transactions.transaction(resource, fn ->
-        case do_something() do
-          {:ok, result} -> result
-          {:error, reason} -> AshXTDB.DataLayer.Transactions.rollback(resource, reason)
-        end
-      end)
+  Since there is no real database transaction, `rollback/2` raises an error.
+  XTDB operations are not rollback-safe — each statement executes immediately.
   """
 
-  alias AshXTDB.DataLayer.Errors
   alias AshXTDB.DataLayer.Info
 
   @doc """
-  Executes a function within a database transaction.
+  Executes a function with a checked-out connection.
 
-  ## Parameters
+  Uses `repo.run()` instead of `repo.transaction()` because XTDB's pgwire
+  protocol does not support `SELECT` inside DML transactions.
 
-  - `resource` - The Ash resource (used to get the repo)
-  - `func` - Zero-arity function to execute within the transaction
-  - `timeout` - Transaction timeout (currently unused, reserved for future use)
-  - `reason` - Transaction reason (currently unused, for debugging/tracing)
-
-  ## Returns
-
-  - `{:ok, result}` - Transaction completed successfully with result
-  - `{:error, reason}` - Transaction failed or was rolled back
+  The function still runs with a dedicated connection, but no `BEGIN`/`COMMIT`
+  is sent to XTDB.
   """
   @spec transaction(Ash.Resource.t(), (-> any()), timeout() | nil, term()) ::
           {:ok, any()} | {:error, any()}
   def transaction(resource, func, _timeout, _reason) do
     repo = Info.repo!(resource)
 
-    if in_transaction?(resource) do
-      # Already in a transaction, just run the function
+    if repo.in_transaction?() do
       {:ok, func.()}
     else
-      # Use DBConnection transaction with proper pooling
-      # We wrap in try/rescue to catch exceptions and convert to error tuples
       try do
-        case repo.transaction(fn ->
-               try do
-                 func.()
-               catch
-                 :throw, {:ash_rollback, value} ->
-                   repo.rollback({:ash_rollback, value})
-               end
-             end) do
-          # Transaction completed - pass through the result
-          # The inner func may return {:ok, result}, {:ok, result, changeset, notifications},
-          # {:error, error}, or other values. We wrap in {:ok, ...} to indicate the
-          # transaction itself succeeded.
-          {:ok, result} ->
-            {:ok, result}
-
-          # Transaction was rolled back via throw
-          {:error, {:ash_rollback, value}} ->
-            {:error, value}
-
-          # Connection error during transaction
-          {:error, %DBConnection.ConnectionError{} = error} ->
-            {:error, Errors.to_ash_error(error)}
-
-          # Other rollback reasons (e.g., from repo.rollback)
-          {:error, error} ->
-            {:error, Errors.to_ash_error(error)}
-        end
+        # repo.run() returns the function's result directly (no {:ok, ...} wrapping),
+        # unlike repo.transaction() which wraps in {:ok, result} / {:error, reason}.
+        repo.run(fn ->
+          try do
+            {:ok, func.()}
+          catch
+            :throw, {:ash_rollback, value} ->
+              {:error, value}
+          end
+        end)
       rescue
         e ->
           {:error, Ash.Error.to_ash_error(e, __STACKTRACE__)}
@@ -100,35 +57,25 @@ defmodule AshXTDB.DataLayer.Transactions do
   end
 
   @doc """
-  Rolls back the current transaction with the given value.
+  Raises an error — XTDB does not support transactional rollback.
 
-  This will cause the enclosing `transaction/4` call to return `{:error, value}`.
-
-  ## Parameters
-
-  - `resource` - The Ash resource (used to get the repo)
-  - `value` - The rollback reason/value
-
-  ## Raises
-
-  Raises if called outside of a transaction.
+  XTDB's pgwire protocol does not support multi-statement transactions,
+  so there is nothing to roll back. Each DML statement executes immediately.
   """
   @spec rollback(Ash.Resource.t(), term()) :: no_return()
-  def rollback(resource, value) do
-    repo = Info.repo!(resource)
-    repo.rollback(value)
+  def rollback(_resource, _value) do
+    raise """
+    XTDB does not support transactional rollback.
+
+    XTDB's pgwire protocol executes each DML statement immediately — there is
+    no BEGIN/COMMIT transaction to roll back. If you need atomic operations
+    across multiple records, consider using XTDB's native transaction API
+    or restructuring your logic to handle partial failures.
+    """
   end
 
   @doc """
-  Checks if the current process is inside a transaction.
-
-  ## Parameters
-
-  - `resource` - The Ash resource (used to get the repo)
-
-  ## Returns
-
-  `true` if inside a transaction, `false` otherwise.
+  Checks if the current process has a checked-out connection.
   """
   @spec in_transaction?(Ash.Resource.t()) :: boolean()
   def in_transaction?(resource) do

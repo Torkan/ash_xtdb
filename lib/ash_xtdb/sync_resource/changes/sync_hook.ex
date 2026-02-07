@@ -108,6 +108,7 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
       action_name: changeset.action.name,
       actor: context.actor,
       tenant: changeset.tenant,
+      resource: changeset.resource,
       valid_from: valid_from,
       valid_to: valid_to
     }

@@ -59,7 +59,8 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
       if skip_sync?(changeset) do
         {:ok, result}
       else
-        sync_context = build_sync_context(changeset, context, valid_from_opt, valid_to_opt)
+        sync_context =
+          build_sync_context(changeset, context, result, action_type, valid_from_opt, valid_to_opt)
         sync_data = build_sync_data(action_type, result, changeset)
 
         sync_result =
@@ -90,18 +91,18 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
     changeset.context[:skip_xtdb_sync] == true
   end
 
-  defp build_sync_context(changeset, context, valid_from_opt, valid_to_opt) do
+  defp build_sync_context(changeset, context, result, action_type, valid_from_opt, valid_to_opt) do
     valid_from =
       case valid_from_opt do
         {:_arg, arg_name} -> Ash.Changeset.get_argument(changeset, arg_name)
         value -> value
-      end || changeset.context[:xtdb_valid_from]
+      end || changeset.context[:xtdb_valid_from] || default_valid_from(action_type, result)
 
     valid_to =
       case valid_to_opt do
         {:_arg, arg_name} -> Ash.Changeset.get_argument(changeset, arg_name)
         value -> value
-      end || changeset.context[:xtdb_valid_to]
+      end || changeset.context[:xtdb_valid_to] || default_valid_to(action_type)
 
     %{
       action_name: changeset.action.name,
@@ -112,6 +113,23 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
     }
   end
 
+  defp default_valid_to(:destroy), do: DateTime.utc_now()
+  defp default_valid_to(_action_type), do: nil
+
+  defp default_valid_from(:destroy, _result), do: DateTime.utc_now()
+
+  defp default_valid_from(_action_type, result) do
+    get_timestamp(result, :updated_at) || DateTime.utc_now()
+  end
+
+  defp get_timestamp(data, field) when is_map(data) do
+    case Map.get(data, field) do
+      %DateTime{} = dt -> dt
+      %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
+      _ -> nil
+    end
+  end
+
   defp build_sync_data(:destroy, result, changeset) do
     pkey_fields = Ash.Resource.Info.primary_key(changeset.resource)
 
@@ -120,8 +138,13 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
     end)
   end
 
-  defp build_sync_data(_action_type, result, _changeset) do
-    result
+  defp build_sync_data(_action_type, result, changeset) do
+    attribute_names =
+      changeset.resource
+      |> Ash.Resource.Info.attributes()
+      |> Enum.map(& &1.name)
+
+    Map.take(result, attribute_names)
   end
 
   # ============================================================================

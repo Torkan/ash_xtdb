@@ -53,13 +53,12 @@ defmodule AshXTDB.SyncAdapters.Oban do
 
   defp build_job_args(history_resource, action_type, data, context) do
     record_data = serialize_data(data)
-    valid_from = extract_valid_from(action_type, data, context)
 
     args = %{
       "sync_type" => to_string(action_type),
       "history_resource" => to_string(history_resource),
       "record_data" => record_data,
-      "valid_from" => serialize_datetime(valid_from),
+      "valid_from" => serialize_datetime(context.valid_from),
       "tenant" => context.tenant
     }
 
@@ -67,34 +66,6 @@ defmodule AshXTDB.SyncAdapters.Oban do
       Map.put(args, "valid_to", serialize_datetime(context.valid_to))
     else
       args
-    end
-  end
-
-  defp extract_valid_from(action_type, data, context) do
-    # Use explicit context override first
-    cond do
-      context.valid_from ->
-        context.valid_from
-
-      action_type == :create && is_map(data) ->
-        get_timestamp(data, :inserted_at) || DateTime.utc_now()
-
-      action_type == :update && is_map(data) ->
-        get_timestamp(data, :updated_at) || DateTime.utc_now()
-
-      action_type == :destroy ->
-        DateTime.utc_now()
-
-      true ->
-        DateTime.utc_now()
-    end
-  end
-
-  defp get_timestamp(data, field) when is_map(data) do
-    case Map.get(data, field) || Map.get(data, to_string(field)) do
-      %DateTime{} = dt -> dt
-      %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
-      _ -> nil
     end
   end
 

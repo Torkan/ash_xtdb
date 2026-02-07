@@ -30,9 +30,9 @@ sudo chown -R 20000:20000 ~/.xtdb/data
 ```bash
 docker run -d \
   --name xtdb \
-  -p 5432:5432 \
+  -p 5433:5432 \
   -p 8080:8080 \
-  -v ~/.xtdb/data:/var/lib/xtdb \
+  -v xtdb-data:/var/lib/xtdb \
   ghcr.io/xtdb/xtdb
 ```
 
@@ -100,11 +100,11 @@ psql -h localhost -p 5432 -d xtdb
 
 ```sql
 -- Create a database for your project
-ATTACH DATABASE my_project WITH $$
+ATTACH DATABASE mission_hub_prod WITH $$
   log: !Local
-    path: '/var/lib/xtdb/my_project/log'
+    path: '/var/lib/xtdb/mission_hub_prod/log'
   storage: !Local
-    path: '/var/lib/xtdb/my_project/storage'
+    path: '/var/lib/xtdb/mission_hub_prod/storage'
 $$;
 
 -- Verify it exists

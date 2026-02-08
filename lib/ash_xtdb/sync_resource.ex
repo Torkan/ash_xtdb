@@ -101,5 +101,6 @@ defmodule AshXTDB.SyncResource do
 
   use Spark.Dsl.Extension,
     sections: [@xtdb_sync],
-    transformers: [AshXTDB.SyncResource.Transformers.AddSyncHooks]
+    transformers: [AshXTDB.SyncResource.Transformers.AddSyncHooks],
+    verifiers: [AshXTDB.SyncResource.Verifiers.ValidatePrimaryKey]
 end

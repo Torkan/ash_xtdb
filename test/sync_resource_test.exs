@@ -111,7 +111,7 @@ defmodule AshXTDB.SyncResourceTest do
       assert resource == SyncedResource
       assert action_type == :create
       assert data.name == "test"
-      assert data.id == record.id
+      assert data._id == record.id
       assert context.action_name == :create
     end
 
@@ -135,7 +135,7 @@ defmodule AshXTDB.SyncResourceTest do
       assert resource == SyncedResource
       assert action_type == :update
       assert data.name == "updated"
-      assert data.id == updated.id
+      assert data._id == updated.id
       assert context.action_name == :update
     end
 
@@ -156,7 +156,7 @@ defmodule AshXTDB.SyncResourceTest do
       [{resource, action_type, data, context}] = calls
       assert resource == SyncedResource
       assert action_type == :destroy
-      assert data == %{id: record_id}
+      assert data == %{_id: record_id}
       assert context.action_name == :destroy
     end
   end
@@ -293,7 +293,7 @@ defmodule AshXTDB.SyncResourceTest do
       [{resource, action_type, data, _context}] = calls
       assert resource == DefaultSyncResource
       assert action_type == :create
-      assert data.id == record.id
+      assert data._id == record.id
     end
   end
 end

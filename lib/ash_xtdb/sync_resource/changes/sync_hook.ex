@@ -132,20 +132,22 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
   end
 
   defp build_sync_data(:destroy, result, changeset) do
-    pkey_fields = Ash.Resource.Info.primary_key(changeset.resource)
-
-    Map.new(pkey_fields, fn field ->
-      {field, Map.get(result, field)}
-    end)
+    [pkey_field] = Ash.Resource.Info.primary_key(changeset.resource)
+    %{_id: Map.get(result, pkey_field)}
   end
 
   defp build_sync_data(_action_type, result, changeset) do
+    [pkey_field] = Ash.Resource.Info.primary_key(changeset.resource)
+
     attribute_names =
       changeset.resource
       |> Ash.Resource.Info.attributes()
       |> Enum.map(& &1.name)
+      |> Enum.reject(&(&1 == pkey_field))
 
-    Map.take(result, attribute_names)
+    result
+    |> Map.take(attribute_names)
+    |> Map.put(:_id, Map.get(result, pkey_field))
   end
 
   # ============================================================================

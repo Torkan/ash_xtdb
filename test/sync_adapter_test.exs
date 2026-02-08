@@ -111,7 +111,7 @@ defmodule AshXTDB.SyncAdapterTest do
         assert_received {:enqueued, history_resource, :create, data, context}
         assert history_resource == AshXTDB.SyncAdapterTest.AdapterTestResource.History
         assert data.name == "adapter_test"
-        assert data.id == record.id
+        assert data._id == record.id
         assert context.action_name == :create
       after
         if original do

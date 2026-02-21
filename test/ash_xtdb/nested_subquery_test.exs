@@ -289,7 +289,7 @@ defmodule AshXTDB.NestedSubqueryTest do
           posts = parse_nested(posts_raw)
           assert length(posts) == 2
           # Posts should be ordered by title descending
-          titles = Enum.map(posts, fn p -> p["title"] end)
+          titles = Enum.map(posts, fn p -> p[:title] || p["title"] end)
           assert titles == Enum.sort(titles, :desc)
 
         {:error, error} ->
@@ -329,8 +329,8 @@ defmodule AshXTDB.NestedSubqueryTest do
           author = parse_nested(author_raw)
           assert title == "NestAlice Post 1"
           assert is_map(author)
-          assert author["name"] == "NestAlice"
-          assert author["_id"] == user1.id
+          assert (author[:name] || author["name"]) == "NestAlice"
+          assert (author[:_id] || author["_id"]) == user1.id
 
         {:error, error} ->
           flunk("NEST_ONE query failed: #{inspect(error)}")

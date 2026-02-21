@@ -46,22 +46,21 @@ reloaded.age  # This has the correct updated value
 
 ---
 
-### 2. Aggregate Filters Inside Nested Exists Clauses
+### 2. Multi-Level Aggregate Relationship Paths in Exists
 
-**Status:** Limitation - Use nested exists as workaround
+**Status:** Limitation
 **Severity:** Low
 
 **Description:**
-Filtering by aggregate values (e.g., `count`, `sum`) inside nested `exists` clauses requires the aggregate to be defined at the correct level. This is a limitation of how aggregates are scoped in SQL.
+Aggregate references inside `exists()` clauses work for single-level relationship paths (e.g., `user_count` which traverses `:users`). Multi-level relationship paths (aggregates that traverse 2+ relationships) are not yet supported in this context and will fall back to `0`.
 
 **Recommended Pattern:**
-Use `exists` on the related resource instead of aggregate comparison:
+For multi-level cases, use nested `exists` instead of aggregate comparison:
 ```elixir
-# Instead of:
-Organization
-|> Ash.Query.filter(exists(projects, member_count > 0))
+# Multi-level aggregate path (not yet supported):
+# Organization |> Ash.Query.filter(exists(projects, deep_nested_count > 0))
 
-# Use:
+# Use nested exists instead:
 Organization
 |> Ash.Query.filter(exists(projects, exists(members, true)))
 ```
@@ -71,6 +70,38 @@ Organization
 ## Fixed Limitations (Previously Not Working)
 
 The following issues were fixed in 2026:
+
+### ✅ Aggregate Filters Inside Exists Clauses
+
+**Fixed in:** February 2026
+
+**What was fixed:**
+Aggregate references inside `exists()` clauses now generate inline correlated scalar subqueries instead of silently falling back to `0`.
+
+**Example that now works:**
+```elixir
+# Projects whose organization has users
+Project
+|> Ash.Query.filter(exists(organization, user_count > 0))
+|> Ash.read!()
+
+# Organizations with users who have posts
+Organization
+|> Ash.Query.filter(exists(users, post_count > 0))
+|> Ash.read!()
+
+# Aggregates with filters also work
+Project
+|> Ash.Query.filter(exists(organization, active_user_count > 1))
+|> Ash.read!()
+```
+
+**Implementation:**
+- When an aggregate reference is not found in the root `aggregate_alias_map` and we're inside an EXISTS context (`in_exists?: true`), generate an inline `(SELECT COUNT(*)/SUM()/... FROM table WHERE correlation)` scalar subquery
+- Aggregate filters (e.g., `count :active_users, filter: expr(active == true)`) are applied as additional WHERE conditions in the subquery
+- Single-level relationship paths are supported; multi-level paths fall back to `0` with a warning
+
+---
 
 ### ✅ Aggregate Filters at Top Level
 
@@ -166,6 +197,7 @@ For reference, these features were tested and work correctly:
 - ✅ Two-level, three-level, and four-level nested exists
 - ✅ Many-to-many exists filters in both directions
 - ✅ Aggregate filters at top level (post_count >= N, etc.)
+- ✅ Aggregate filters inside exists clauses (inline scalar subqueries)
 - ✅ Aggregate sorting (ORDER BY post_count DESC)
 - ✅ Exists with calculation filters on related resources
 - ✅ DISTINCT ON with aggregate sorts

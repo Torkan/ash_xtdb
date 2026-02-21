@@ -574,61 +574,8 @@ defmodule AshXTDB.DataLayer.LateralJoins do
     end
   end
 
-  # ============================================================================
-  # Value Casting
-  # ============================================================================
-
-  defp cast_aggregate_value(nil, _agg), do: nil
-
-  defp cast_aggregate_value(value, %{kind: :count}) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, ""} -> int
-      _ -> value
-    end
+  # Delegate to shared implementation in ResultTransformer
+  defp cast_aggregate_value(value, agg) do
+    ResultTransformer.cast_aggregate_value(value, agg)
   end
-
-  defp cast_aggregate_value(value, %{kind: kind}) when kind in [:sum, :min, :max] do
-    cond do
-      is_binary(value) ->
-        case Integer.parse(value) do
-          {int, ""} ->
-            int
-
-          _ ->
-            case Float.parse(value) do
-              {float, ""} -> float
-              _ -> value
-            end
-        end
-
-      true ->
-        value
-    end
-  end
-
-  defp cast_aggregate_value(value, %{kind: :avg}) when is_binary(value) do
-    case Float.parse(value) do
-      {float, ""} -> float
-      _ -> value
-    end
-  end
-
-  defp cast_aggregate_value(value, %{kind: :exists}) do
-    case value do
-      "t" -> true
-      "f" -> false
-      "true" -> true
-      "false" -> false
-      true -> true
-      false -> false
-      1 -> true
-      0 -> false
-      "1" -> true
-      "0" -> false
-      nil -> false
-      _ -> !!value
-    end
-  end
-
-  defp cast_aggregate_value(value, _agg), do: value
 end

@@ -11,14 +11,14 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
   - Column name to attribute mapping (including `_id` -> primary key)
   - Type casting (booleans, atoms, dates, etc.)
   - Calculation result extraction
+  - Aggregate value casting (shared by data layer and lateral joins)
 
-  ## XTDB-Specific Considerations
+  ## Type Casting
 
-  XTDB returns values in various formats that may differ from Elixir types:
-  - Booleans may come as "t"/"f" strings
-  - Atoms come as strings
-  - Maps may come as JSON strings
-  - DateTimes come as ISO 8601 strings
+  The connection layer (`AshXTDB.Connection`) handles primary type casting
+  via XTDB's type OIDs (bool->boolean, int->integer, float->float). The
+  casting functions here serve as safety nets for edge cases where values
+  may still arrive as strings (e.g., atoms, certain JSON-encoded values).
   """
 
   @doc """
@@ -181,32 +181,131 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
 
   @doc """
   Coerces XTDB boolean string representations to Elixir booleans.
+
+  Note: The connection layer now handles boolean casting via OIDs for most cases.
+  This remains as a safety net for edge cases.
   """
   @spec coerce_boolean(term()) :: boolean() | term()
   def coerce_boolean(value) when value in ["t", "true", "TRUE", "1", "yes", "YES"], do: true
   def coerce_boolean(value) when value in ["f", "false", "FALSE", "0", "no", "NO", ""], do: false
   def coerce_boolean(value), do: value
 
+  # ============================================================================
+  # Aggregate Value Casting
+  # ============================================================================
+
   @doc """
-  Attempts to parse a string as a numeric value.
+  Casts an aggregate result value to the appropriate Elixir type.
 
-  Returns the parsed number or the original value if parsing fails.
+  The connection layer now casts most values via OIDs (integers arrive as
+  integers, booleans as booleans). The `when is_integer`/`when is_number`
+  clauses handle the common (already-typed) path; the `when is_binary`
+  clauses remain as fallbacks for edge cases.
   """
-  @spec maybe_parse_numeric(term()) :: number() | term()
-  def maybe_parse_numeric(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, ""} ->
-        int
+  @spec cast_aggregate_value(term(), map()) :: term()
+  def cast_aggregate_value(nil, _agg), do: nil
 
-      _ ->
-        case Float.parse(value) do
-          {float, ""} -> float
-          _ -> value
-        end
+  # Count — already an integer from connection layer
+  def cast_aggregate_value(value, %{kind: :count}) when is_integer(value), do: value
+
+  def cast_aggregate_value(value, %{kind: :count}) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} -> int
+      _ -> value
     end
   end
 
-  def maybe_parse_numeric(value), do: value
+  # Sum/Min/Max — pass through already-typed values
+  def cast_aggregate_value(value, %{kind: kind}) when kind in [:sum, :min, :max] do
+    if is_binary(value) do
+      case Integer.parse(value) do
+        {int, ""} ->
+          int
+
+        _ ->
+          case Float.parse(value) do
+            {float, ""} -> float
+            _ -> value
+          end
+      end
+    else
+      value
+    end
+  end
+
+  # Avg — pass through already-typed numbers
+  def cast_aggregate_value(value, %{kind: :avg}) when is_number(value), do: value
+
+  def cast_aggregate_value(value, %{kind: :avg}) when is_binary(value) do
+    case Float.parse(value) do
+      {float, ""} -> float
+      _ -> value
+    end
+  end
+
+  # Exists — booleans arrive as booleans from connection layer
+  def cast_aggregate_value(true, %{kind: :exists}), do: true
+  def cast_aggregate_value(false, %{kind: :exists}), do: false
+
+  def cast_aggregate_value(value, %{kind: :exists}) do
+    case value do
+      "t" -> true
+      "f" -> false
+      "true" -> true
+      "false" -> false
+      1 -> true
+      0 -> false
+      "1" -> true
+      "0" -> false
+      nil -> false
+      _ -> !!value
+    end
+  end
+
+  # Statistical aggregates return floats
+  def cast_aggregate_value(value, %{kind: kind})
+      when kind in [:stddev_pop, :stddev_samp, :var_pop, :var_samp] do
+    cond do
+      is_nil(value) ->
+        nil
+
+      is_float(value) ->
+        value
+
+      is_integer(value) ->
+        value * 1.0
+
+      is_binary(value) ->
+        case Float.parse(value) do
+          {float, _} -> float
+          :error -> value
+        end
+
+      true ->
+        value
+    end
+  end
+
+  # Boolean aggregates — booleans arrive as booleans from connection layer
+  def cast_aggregate_value(true, %{kind: kind}) when kind in [:bool_and, :bool_or], do: true
+  def cast_aggregate_value(false, %{kind: kind}) when kind in [:bool_and, :bool_or], do: false
+
+  def cast_aggregate_value(value, %{kind: kind}) when kind in [:bool_and, :bool_or] do
+    case value do
+      "t" -> true
+      "f" -> false
+      "true" -> true
+      "false" -> false
+      1 -> true
+      0 -> false
+      "1" -> true
+      "0" -> false
+      nil -> nil
+      _ -> !!value
+    end
+  end
+
+  def cast_aggregate_value(value, _agg), do: value
 
   # ============================================================================
   # ID Mapping

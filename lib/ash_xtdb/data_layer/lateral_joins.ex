@@ -67,9 +67,34 @@ defmodule AshXTDB.DataLayer.LateralJoins do
         query,
         root_data,
         destination_resource,
-        [{_source_query, _source_attribute, _destination_attribute, _relationship}] = path
+        [{source_query, source_attribute, destination_attribute, relationship}]
       ) do
-    run_nested_lateral_join(query, root_data, destination_resource, path)
+    source_resource = source_query.resource
+    dest_table = Info.table!(destination_resource)
+
+    nest_type =
+      case relationship.cardinality do
+        :one -> :nest_one
+        :many -> :nest_many
+      end
+
+    nested_config = %{
+      name: relationship.name,
+      type: nest_type,
+      resource: destination_resource,
+      table: dest_table,
+      correlation: {source_attribute, destination_attribute},
+      select: query.select,
+      filter: query.filter,
+      sort: query.sort,
+      limit: query.limit,
+      offset: query.offset
+    }
+
+    execute_nested_query(query, root_data, source_resource, destination_resource,
+      nested_config: nested_config,
+      relationship_name: relationship.name
+    )
   end
 
   # Many-to-many relationship (2 join links) - e.g., through join table
@@ -78,11 +103,40 @@ defmodule AshXTDB.DataLayer.LateralJoins do
         root_data,
         destination_resource,
         [
-          {_source_query, _source_attribute, _source_attr_on_join, _relationship},
-          {_through_query, _dest_attr_on_join, _destination_attribute, _through_relationship}
-        ] = path
+          {source_query, source_attribute, source_attr_on_join, relationship},
+          {through_query, dest_attr_on_join, destination_attribute, _through_relationship}
+        ]
       ) do
-    run_nested_many_to_many_lateral_join(query, root_data, destination_resource, path)
+    source_resource = source_query.resource
+    through_resource = through_query.resource
+    through_table = Info.table!(through_resource)
+    dest_table = Info.table!(destination_resource)
+
+    nested_config = %{
+      name: relationship.name,
+      type: :nest_many,
+      resource: destination_resource,
+      table: dest_table,
+      correlation:
+        {:through_subquery,
+         %{
+           through_table: through_table,
+           source_attr_on_join: source_attr_on_join,
+           dest_attr_on_join: dest_attr_on_join,
+           destination_attribute: destination_attribute,
+           source_attribute: source_attribute
+         }},
+      select: query.select,
+      filter: query.filter,
+      sort: query.sort,
+      limit: query.limit,
+      offset: query.offset
+    }
+
+    execute_nested_query(query, root_data, source_resource, destination_resource,
+      nested_config: nested_config,
+      relationship_name: relationship.name
+    )
   end
 
   # ============================================================================
@@ -158,58 +212,18 @@ defmodule AshXTDB.DataLayer.LateralJoins do
   end
 
   # ============================================================================
-  # NEST_MANY/NEST_ONE Implementation
+  # Shared NEST_MANY/NEST_ONE Execution
   # ============================================================================
 
-  defp run_nested_lateral_join(
-         query,
-         root_data,
-         destination_resource,
-         [{source_query, source_attribute, destination_attribute, relationship}]
-       ) do
-    source_resource = source_query.resource
+  defp execute_nested_query(query, root_data, source_resource, destination_resource, opts) do
+    nested_config = Keyword.fetch!(opts, :nested_config)
+    relationship_name = Keyword.fetch!(opts, :relationship_name)
     repo = Info.repo!(source_resource)
     source_table = Info.table!(source_resource)
-    dest_table = Info.table!(destination_resource)
     pkey_attrs = Ash.Resource.Info.primary_key(source_resource)
 
-    # Determine nest type based on relationship
-    nest_type =
-      case relationship.cardinality do
-        :one -> :nest_one
-        :many -> :nest_many
-      end
+    parent_filter = build_parent_filter(source_resource, pkey_attrs, root_data)
 
-    # Build nested subquery configuration
-    nested_config = %{
-      name: relationship.name,
-      type: nest_type,
-      resource: destination_resource,
-      table: dest_table,
-      correlation: {source_attribute, destination_attribute},
-      select: query.select,
-      filter: query.filter,
-      sort: query.sort,
-      limit: query.limit,
-      offset: query.offset
-    }
-
-    # Build filter for parent records
-    pkey_values = Enum.map(root_data, fn record -> Map.take(record, pkey_attrs) end)
-
-    parent_filter =
-      case pkey_attrs do
-        [pkey] ->
-          values = Enum.map(pkey_values, &Map.get(&1, pkey))
-          Ash.Filter.parse!(source_resource, [{pkey, [in: values]}])
-
-        _ ->
-          # Composite primary key
-          conditions = Enum.map(pkey_values, &Map.to_list/1)
-          Ash.Filter.parse!(source_resource, or: conditions)
-      end
-
-    # Build query with nested subquery
     parent_query = %SQL{
       resource: source_resource,
       domain: query.domain,
@@ -221,119 +235,19 @@ defmodule AshXTDB.DataLayer.LateralJoins do
 
     {sql, params} = SQL.to_sql(parent_query, :select)
 
-    Logger.debug("AshXTDB NEST_#{String.upcase(to_string(nest_type))} SQL: #{sql}")
+    Logger.debug("AshXTDB NEST SQL: #{sql}")
 
     case repo.query(sql, params) do
       {:ok, %Postgrex.Result{rows: rows, columns: columns}} ->
-        # Transform nested results
-        parent_records = NestedResult.transform_rows(rows, columns, [nested_config])
-
-        # Map _id to primary key for parent records (so extract_nested can find pkey)
         parent_records =
-          Enum.map(parent_records, fn record ->
-            ResultTransformer.map_id_to_primary_key(record, source_resource)
-          end)
-
-        # Extract nested records with __lateral_join_source__
-        nested_records =
-          NestedResult.extract_nested(
-            parent_records,
-            relationship.name,
-            destination_resource,
-            source_resource
-          )
-
-        {:ok, nested_records}
-
-      {:error, error} ->
-        {:error, Errors.to_ash_error(error)}
-    end
-  end
-
-  defp run_nested_many_to_many_lateral_join(
-         query,
-         root_data,
-         destination_resource,
-         [
-           {source_query, source_attribute, source_attr_on_join, relationship},
-           {through_query, dest_attr_on_join, destination_attribute, _through_relationship}
-         ]
-       ) do
-    source_resource = source_query.resource
-    through_resource = through_query.resource
-    repo = Info.repo!(source_resource)
-    source_table = Info.table!(source_resource)
-    through_table = Info.table!(through_resource)
-    dest_table = Info.table!(destination_resource)
-    pkey_attrs = Ash.Resource.Info.primary_key(source_resource)
-
-    # For many-to-many, we use a subquery in the WHERE clause:
-    # NEST_MANY(SELECT ... FROM dest WHERE dest.id IN
-    #           (SELECT through.dest_id FROM through WHERE through.source_id = parent.id))
-    nested_config = %{
-      name: relationship.name,
-      type: :nest_many,
-      resource: destination_resource,
-      table: dest_table,
-      # For many-to-many, correlation is done via through table subquery
-      correlation:
-        {:through_subquery,
-         %{
-           through_table: through_table,
-           source_attr_on_join: source_attr_on_join,
-           dest_attr_on_join: dest_attr_on_join,
-           destination_attribute: destination_attribute,
-           source_attribute: source_attribute
-         }},
-      select: query.select,
-      filter: query.filter,
-      sort: query.sort,
-      limit: query.limit,
-      offset: query.offset
-    }
-
-    # Build filter for parent records
-    pkey_values = Enum.map(root_data, fn record -> Map.take(record, pkey_attrs) end)
-
-    parent_filter =
-      case pkey_attrs do
-        [pkey] ->
-          values = Enum.map(pkey_values, &Map.get(&1, pkey))
-          Ash.Filter.parse!(source_resource, [{pkey, [in: values]}])
-
-        _ ->
-          conditions = Enum.map(pkey_values, &Map.to_list/1)
-          Ash.Filter.parse!(source_resource, or: conditions)
-      end
-
-    # Build query with nested subquery
-    parent_query = %SQL{
-      resource: source_resource,
-      domain: query.domain,
-      table: source_table,
-      filter: parent_filter,
-      context: query.context,
-      nested_subqueries: [nested_config]
-    }
-
-    {sql, params} = SQL.to_sql(parent_query, :select)
-
-    Logger.debug("AshXTDB NEST_MANY (M2M) SQL: #{sql}")
-
-    case repo.query(sql, params) do
-      {:ok, %Postgrex.Result{rows: rows, columns: columns}} ->
-        parent_records = NestedResult.transform_rows(rows, columns, [nested_config])
-
-        # Map _id to primary key for parent records (so extract_nested can find pkey)
-        parent_records =
-          Enum.map(parent_records, fn record ->
-            ResultTransformer.map_id_to_primary_key(record, source_resource)
-          end)
+          rows
+          |> NestedResult.transform_rows(columns, [nested_config])
+          |> Enum.map(&ResultTransformer.map_id_to_primary_key(&1, source_resource))
 
         nested_records =
           NestedResult.extract_nested(
             parent_records,
-            relationship.name,
+            relationship_name,
             destination_resource,
             source_resource
           )
@@ -391,47 +305,28 @@ defmodule AshXTDB.DataLayer.LateralJoins do
     end
   end
 
-  defp run_simple_lateral_aggregate(
-         query,
-         aggregates,
-         parents,
-         source_attribute,
-         destination_attribute
-       ) do
+  defp run_simple_lateral_aggregate(query, aggregates, parents, source_attribute, dest_attribute) do
     destination_resource = query.resource
 
     Enum.reduce_while(parents, {:ok, []}, fn parent, {:ok, results} ->
       correlation_value = Map.get(parent, source_attribute)
-      source_pkey = Ash.Resource.Info.primary_key(parent.__struct__)
+      parent_pkey = parent_pkey_map(parent)
 
       if is_nil(correlation_value) do
-        # Return defaults for nil correlation
-        default_result =
-          aggregates
-          |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-          |> Map.new()
-          |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
-
-        {:cont, {:ok, [default_result | results]}}
+        {:cont, {:ok, [tagged_default(aggregates, parent_pkey) | results]}}
       else
         correlated_filter =
-          Ash.Filter.parse!(destination_resource, [{destination_attribute, correlation_value}])
+          Ash.Filter.parse!(destination_resource, [{dest_attribute, correlation_value}])
 
-        merged_filter =
-          if query.filter do
-            Ash.Filter.add_to_filter!(query.filter, correlated_filter)
-          else
-            correlated_filter
-          end
+        correlated_query = %{query | filter: merge_filter(query.filter, correlated_filter)}
 
-        correlated_query = %{query | filter: merged_filter}
-
-        case run_aggregate_query(correlated_query, aggregates, destination_resource) do
+        case ResultTransformer.run_aggregate_query(
+               correlated_query,
+               aggregates,
+               destination_resource
+             ) do
           {:ok, agg_result} ->
-            tagged_result =
-              Map.put(agg_result, :__lateral_join_source__, Map.take(parent, source_pkey))
-
-            {:cont, {:ok, [tagged_result | results]}}
+            {:cont, {:ok, [tag_with_source(agg_result, parent_pkey) | results]}}
 
           {:error, error} ->
             {:halt, {:error, error}}
@@ -454,74 +349,38 @@ defmodule AshXTDB.DataLayer.LateralJoins do
 
     Enum.reduce_while(parents, {:ok, []}, fn parent, {:ok, results} ->
       correlation_value = Map.get(parent, source_attribute)
-      source_pkey = Ash.Resource.Info.primary_key(parent.__struct__)
+      parent_pkey = parent_pkey_map(parent)
 
       if is_nil(correlation_value) do
-        default_result =
-          aggregates
-          |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-          |> Map.new()
-          |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
-
-        {:cont, {:ok, [default_result | results]}}
+        {:cont, {:ok, [tagged_default(aggregates, parent_pkey) | results]}}
       else
-        through_query_filtered =
-          Ash.Query.filter(
-            through_query,
-            ^Ash.Expr.ref(source_attr_on_join) == ^correlation_value
-          )
+        case resolve_m2m_destination_values(
+               through_query,
+               correlation_value,
+               source_attr_on_join,
+               dest_attr_on_join
+             ) do
+          {:ok, []} ->
+            {:cont, {:ok, [tagged_default(aggregates, parent_pkey) | results]}}
 
-        case Ash.read(through_query_filtered, authorize?: false) do
-          {:ok, join_records} ->
-            if Enum.empty?(join_records) do
-              default_result =
-                aggregates
-                |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-                |> Map.new()
-                |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
+          {:ok, dest_attr_values} ->
+            dest_filter =
+              Ash.Filter.parse!(destination_resource, [
+                {destination_attribute, [in: dest_attr_values]}
+              ])
 
-              {:cont, {:ok, [default_result | results]}}
-            else
-              dest_attr_values =
-                join_records
-                |> Enum.map(&Map.get(&1, dest_attr_on_join))
-                |> Enum.reject(&is_nil/1)
-                |> Enum.uniq()
+            correlated_query = %{query | filter: merge_filter(query.filter, dest_filter)}
 
-              if Enum.empty?(dest_attr_values) do
-                default_result =
-                  aggregates
-                  |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-                  |> Map.new()
-                  |> Map.put(:__lateral_join_source__, Map.take(parent, source_pkey))
+            case ResultTransformer.run_aggregate_query(
+                   correlated_query,
+                   aggregates,
+                   destination_resource
+                 ) do
+              {:ok, agg_result} ->
+                {:cont, {:ok, [tag_with_source(agg_result, parent_pkey) | results]}}
 
-                {:cont, {:ok, [default_result | results]}}
-              else
-                dest_filter =
-                  Ash.Filter.parse!(destination_resource, [
-                    {destination_attribute, [in: dest_attr_values]}
-                  ])
-
-                merged_filter =
-                  if query.filter do
-                    Ash.Filter.add_to_filter!(query.filter, dest_filter)
-                  else
-                    dest_filter
-                  end
-
-                correlated_query = %{query | filter: merged_filter}
-
-                case run_aggregate_query(correlated_query, aggregates, destination_resource) do
-                  {:ok, agg_result} ->
-                    tagged_result =
-                      Map.put(agg_result, :__lateral_join_source__, Map.take(parent, source_pkey))
-
-                    {:cont, {:ok, [tagged_result | results]}}
-
-                  {:error, error} ->
-                    {:halt, {:error, error}}
-                end
-              end
+              {:error, error} ->
+                {:halt, {:error, error}}
             end
 
           {:error, error} ->
@@ -532,50 +391,72 @@ defmodule AshXTDB.DataLayer.LateralJoins do
   end
 
   # ============================================================================
-  # Aggregate Query Helper (used internally)
+  # Private Helpers
   # ============================================================================
 
-  defp run_aggregate_query(query, aggregates, resource) do
-    repo = Info.repo!(resource)
-    {sql, params} = SQL.to_aggregate_sql(query, aggregates)
+  # Builds a filter to select parent records by primary key from root_data.
+  defp build_parent_filter(resource, pkey_attrs, root_data) do
+    pkey_values = Enum.map(root_data, fn record -> Map.take(record, pkey_attrs) end)
 
-    Logger.debug("AshXTDB Lateral Aggregate SQL: #{sql} with params: #{inspect(params)}")
+    case pkey_attrs do
+      [pkey] ->
+        values = Enum.map(pkey_values, &Map.get(&1, pkey))
+        Ash.Filter.parse!(resource, [{pkey, [in: values]}])
 
-    case repo.query(sql, params) do
-      {:ok, %Postgrex.Result{rows: [row], columns: columns}} ->
-        # Map column names to aggregate names and values
-        result =
-          columns
-          |> Enum.zip(row)
-          |> Enum.reduce(%{}, fn {col_name, value}, acc ->
-            # Find the aggregate with this name
-            agg = Enum.find(aggregates, fn a -> Atom.to_string(a.name) == col_name end)
-
-            if agg do
-              Map.put(acc, agg.name, cast_aggregate_value(value, agg))
-            else
-              acc
-            end
-          end)
-
-        {:ok, result}
-
-      {:ok, %Postgrex.Result{rows: []}} ->
-        # No results - return defaults
-        result =
-          aggregates
-          |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-          |> Map.new()
-
-        {:ok, result}
-
-      {:error, error} ->
-        {:error, Errors.to_ash_error(error)}
+      _ ->
+        conditions = Enum.map(pkey_values, &Map.to_list/1)
+        Ash.Filter.parse!(resource, or: conditions)
     end
   end
 
-  # Delegate to shared implementation in ResultTransformer
-  defp cast_aggregate_value(value, agg) do
-    ResultTransformer.cast_aggregate_value(value, agg)
+  # Resolves destination attribute values through a join table for M2M relationships.
+  # Returns {:ok, values} or {:error, error}.
+  defp resolve_m2m_destination_values(
+         through_query,
+         correlation_value,
+         source_attr_on_join,
+         dest_attr_on_join
+       ) do
+    filtered =
+      Ash.Query.filter(
+        through_query,
+        ^Ash.Expr.ref(source_attr_on_join) == ^correlation_value
+      )
+
+    case Ash.read(filtered, authorize?: false) do
+      {:ok, join_records} ->
+        values =
+          join_records
+          |> Enum.map(&Map.get(&1, dest_attr_on_join))
+          |> Enum.reject(&is_nil/1)
+          |> Enum.uniq()
+
+        {:ok, values}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  # Merges an additional filter into an existing one (or uses it as-is if nil).
+  defp merge_filter(nil, additional), do: additional
+  defp merge_filter(existing, additional), do: Ash.Filter.add_to_filter!(existing, additional)
+
+  # Extracts the primary key map from a parent record.
+  defp parent_pkey_map(parent) do
+    source_pkey = Ash.Resource.Info.primary_key(parent.__struct__)
+    Map.take(parent, source_pkey)
+  end
+
+  # Builds a default aggregate result tagged with the parent's primary key.
+  defp tagged_default(aggregates, parent_pkey) do
+    aggregates
+    |> ResultTransformer.default_aggregate_result()
+    |> tag_with_source(parent_pkey)
+  end
+
+  # Tags a result map with the parent's primary key for lateral join association.
+  defp tag_with_source(result, parent_pkey) do
+    Map.put(result, :__lateral_join_source__, parent_pkey)
   end
 end

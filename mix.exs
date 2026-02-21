@@ -68,6 +68,8 @@ defmodule AshXTDB.MixProject do
       {:ex_doc, "~> 0.30", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_check, "~> 0.16", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.0", only: [:dev, :test], runtime: false},
       {:sourceror, "~> 1.7", only: [:dev, :test], runtime: false},
       {:tidewave, "~> 0.5", only: [:dev, :test]},
@@ -78,12 +80,6 @@ defmodule AshXTDB.MixProject do
 
   defp aliases do
     [
-      check: [
-        "format --check-formatted",
-        "compile --warnings-as-errors",
-        "credo --strict",
-        "dialyzer"
-      ],
       test: [
         "ash_xtdb.reset",
         "test"

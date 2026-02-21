@@ -145,7 +145,6 @@ defmodule AshXTDB.DataLayer do
   use Spark.Dsl.Extension,
     sections: [@xtdb],
     transformers: [
-      AshXTDB.DataLayer.Transformers.SetDefaults,
       AshXTDB.DataLayer.Transformers.AddTemporalAttributes
     ]
 
@@ -388,49 +387,7 @@ defmodule AshXTDB.DataLayer do
   end
 
   @impl Ash.DataLayer
-  def run_aggregate_query(query, aggregates, resource) do
-    repo = Info.repo!(resource)
-    {sql, params} = SQL.to_aggregate_sql(query, aggregates)
-
-    Logger.debug("AshXTDB Aggregate SQL: #{sql} with params: #{inspect(params)}")
-
-    case repo.query(sql, params) do
-      {:ok, %Postgrex.Result{rows: [row], columns: columns}} ->
-        # Map column names to aggregate names and values
-        result =
-          columns
-          |> Enum.zip(row)
-          |> Enum.reduce(%{}, fn {col_name, value}, acc ->
-            # Find the aggregate with this name
-            agg = Enum.find(aggregates, fn a -> Atom.to_string(a.name) == col_name end)
-
-            if agg do
-              Map.put(acc, agg.name, cast_aggregate_value(value, agg))
-            else
-              acc
-            end
-          end)
-
-        {:ok, result}
-
-      {:ok, %Postgrex.Result{rows: []}} ->
-        # No results - return defaults
-        result =
-          aggregates
-          |> Enum.map(fn agg -> {agg.name, agg.default_value} end)
-          |> Map.new()
-
-        {:ok, result}
-
-      {:error, error} ->
-        {:error, Errors.to_ash_error(error)}
-    end
-  end
-
-  # Delegate to shared implementation in ResultTransformer
-  defp cast_aggregate_value(value, agg) do
-    ResultTransformer.cast_aggregate_value(value, agg)
-  end
+  defdelegate run_aggregate_query(query, aggregates, resource), to: ResultTransformer
 
   # ============================================================================
   # Lateral Join Operations (NEST_MANY/NEST_ONE)

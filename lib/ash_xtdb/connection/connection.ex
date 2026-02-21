@@ -357,17 +357,41 @@ defmodule AshXTDB.Connection do
 
   # Cast text-format values from the simple query protocol using type OIDs
   # from the RowDescription message. XTDB sends real PostgreSQL type OIDs,
-  # so we can parse integers, floats, and booleans at the connection level.
+  # so we can parse values at the connection level, delivering already-typed
+  # data to downstream code.
   defp cast_by_oid(nil, _oid), do: nil
   defp cast_by_oid(val, 16), do: val in ["t", "true"]
   defp cast_by_oid(val, oid) when oid in [20, 21, 23, 26], do: String.to_integer(val)
   defp cast_by_oid(val, oid) when oid in [700, 701], do: parse_float(val)
+  defp cast_by_oid(val, 1082), do: Date.from_iso8601!(val)
+  defp cast_by_oid(val, 1114), do: NaiveDateTime.from_iso8601!(val)
+  defp cast_by_oid(val, 1184), do: parse_timestamptz(val)
+  defp cast_by_oid(val, 114), do: parse_json(val)
+  defp cast_by_oid(val, 25), do: AshXTDB.UTF8Workaround.decode(val)
   defp cast_by_oid(val, _oid), do: val
 
   defp parse_float(val) do
     case Float.parse(val) do
       {f, ""} -> f
       _ -> val
+    end
+  end
+
+  # XTDB uses space separator ("2024-01-15 10:30:00+00:00") instead of ISO 8601 "T"
+  defp parse_timestamptz(val) do
+    # Replace first space with T to make it ISO 8601 compliant
+    normalized = String.replace(val, " ", "T", global: false)
+
+    case DateTime.from_iso8601(normalized) do
+      {:ok, dt, _offset} -> dt
+      {:error, _} -> val
+    end
+  end
+
+  defp parse_json(val) when is_binary(val) do
+    case Jason.decode(val, keys: :atoms) do
+      {:ok, decoded} -> decoded
+      {:error, _} -> val
     end
   end
 

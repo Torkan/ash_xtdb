@@ -25,6 +25,12 @@ defmodule AshXTDB.Connection do
 
   require Logger
 
+  @type t :: %__MODULE__{
+          socket: :gen_tcp.socket() | nil,
+          buffer: binary(),
+          status: :idle | :transaction | :error | nil
+        }
+
   defstruct [:socket, :buffer, :status]
 
   # PostgreSQL message types
@@ -323,21 +329,53 @@ defmodule AshXTDB.Connection do
     end
   end
 
-  defp build_result(columns, rows) do
+  defp build_result(nil, rows) do
     %Postgrex.Result{
-      columns: columns || [],
+      columns: [],
       rows: Enum.reverse(rows),
       num_rows: length(rows)
     }
   end
 
+  defp build_result(columns_with_oids, rows) do
+    {names, type_oids} = Enum.unzip(columns_with_oids)
+    reversed_rows = Enum.reverse(rows)
+
+    cast_rows =
+      Enum.map(reversed_rows, fn row ->
+        row
+        |> Enum.zip(type_oids)
+        |> Enum.map(fn {val, oid} -> cast_by_oid(val, oid) end)
+      end)
+
+    %Postgrex.Result{
+      columns: names,
+      rows: cast_rows,
+      num_rows: length(cast_rows)
+    }
+  end
+
+  # Cast text-format values from the simple query protocol using type OIDs
+  # from the RowDescription message. XTDB sends real PostgreSQL type OIDs,
+  # so we can parse integers, floats, and booleans at the connection level.
+  defp cast_by_oid(nil, _oid), do: nil
+  defp cast_by_oid(val, 16), do: val in ["t", "true"]
+  defp cast_by_oid(val, oid) when oid in [20, 21, 23, 26], do: String.to_integer(val)
+  defp cast_by_oid(val, oid) when oid in [700, 701], do: parse_float(val)
+  defp cast_by_oid(val, _oid), do: val
+
+  defp parse_float(val) do
+    case Float.parse(val) do
+      {f, ""} -> f
+      _ -> val
+    end
+  end
+
   defp drain_until_ready(state, result, timeout) do
     case recv_message(state, timeout) do
       {:ok, <<?Z, _::binary>>, state} ->
-        case result do
-          {:error, error} -> {:error, error, state}
-          _ -> result
-        end
+        {:error, error} = result
+        {:error, error, state}
 
       {:ok, _, state} ->
         drain_until_ready(state, result, timeout)
@@ -378,10 +416,10 @@ defmodule AshXTDB.Connection do
       Enum.reduce(1..num_fields//1, {[], fields_data}, fn _, {cols, data} ->
         {name, rest} = parse_string(data)
 
-        <<_table_oid::32, _col_num::16, _type_oid::32, _type_size::16, _type_mod::32, _format::16,
+        <<_table_oid::32, _col_num::16, type_oid::32, _type_size::16, _type_mod::32, _format::16,
           remaining::binary>> = rest
 
-        {[name | cols], remaining}
+        {[{name, type_oid} | cols], remaining}
       end)
 
     {:ok, Enum.reverse(columns)}

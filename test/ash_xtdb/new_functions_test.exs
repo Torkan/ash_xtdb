@@ -197,7 +197,7 @@ defmodule AshXTDB.NewFunctionsTest do
         ]
       }
 
-      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql(expr, state)
 
       assert sql =~ "POSITION"
       assert sql =~ "CASE WHEN"
@@ -222,7 +222,7 @@ defmodule AshXTDB.NewFunctionsTest do
         ]
       }
 
-      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql(expr, state)
 
       assert sql =~ "CURRENT_DATE"
       assert sql =~ "INTERVAL"
@@ -245,7 +245,7 @@ defmodule AshXTDB.NewFunctionsTest do
         ]
       }
 
-      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = AshXTDB.SQL.Filter.expression_to_sql(expr, state)
 
       assert sql =~ "DATE_TRUNC"
       # XTDB uses unquoted DAY keyword, not 'day'

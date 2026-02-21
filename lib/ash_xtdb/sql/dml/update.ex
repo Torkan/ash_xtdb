@@ -205,7 +205,7 @@ defmodule AshXTDB.SQL.DML.Update do
       table_alias: table
     }
 
-    {sql, final_state} = Filter.expression_to_sql_for_test(expr, state)
+    {sql, final_state} = Filter.expression_to_sql(expr, state)
 
     # Return the SQL, parameters, and next parameter index
     {sql, Enum.reverse(final_state.params), final_state.param_idx}

@@ -626,7 +626,7 @@ defmodule AshXTDB.SQL do
     calculations
     |> Enum.map(fn {calculation, expression} ->
       # Try to convert the expression to SQL
-      case Filter.expression_to_sql_for_test(expression, state) do
+      case Filter.expression_to_sql(expression, state) do
         {nil, _state} ->
           # Not SQL-evaluable, will be computed in Elixir
           nil
@@ -946,7 +946,7 @@ defmodule AshXTDB.SQL do
       table_alias: @table_alias
     }
 
-    case Filter.expression_to_sql_for_test(expression, state) do
+    case Filter.expression_to_sql(expression, state) do
       {nil, _state} ->
         # Can't convert to SQL, this shouldn't happen for sortable calculations
         "NULL"

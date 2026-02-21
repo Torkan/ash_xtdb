@@ -9,16 +9,17 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
   Ash resource structs, including:
 
   - Column name to attribute mapping (including `_id` -> primary key)
-  - Type casting (booleans, atoms, dates, etc.)
+  - Type casting (atoms, maps, etc.)
   - Calculation result extraction
   - Aggregate value casting (shared by data layer and lateral joins)
 
   ## Type Casting
 
   The connection layer (`AshXTDB.Connection`) handles primary type casting
-  via XTDB's type OIDs (bool->boolean, int->integer, float->float). The
-  casting functions here serve as safety nets for edge cases where values
-  may still arrive as strings (e.g., atoms, certain JSON-encoded values).
+  via XTDB's type OIDs: bool, int, float, date, timestamp, timestamptz,
+  JSON, and UTF-8 decode on text. The casting functions here handle
+  Ash-specific type conversions (atoms, maps) and serve as safety nets
+  for edge cases like CASE expressions returning text OID 25.
   """
 
   @doc """
@@ -139,56 +140,33 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
   @doc """
   Casts a raw value to the appropriate Elixir type.
 
-  Handles XTDB-specific value formats like "t"/"f" for booleans.
+  Handles Ash-specific type conversions (atoms, maps). Most primary type
+  casting (booleans, dates, timestamps, numbers) is done at the connection layer.
   """
   @spec cast_value(term(), map() | nil) :: term()
   def cast_value(nil, _type_info), do: nil
   def cast_value(value, nil), do: value
 
   def cast_value(value, %{type: type, constraints: constraints}) do
-    # XTDB via pgwire returns raw values that need proper casting:
-    # - Atoms come as strings -> need String.to_atom
-    # - Booleans may come as "t"/"f" strings -> need explicit conversion
-    # - Maps may come as JSON strings -> cast_input handles this
-    # - DateTimes come as strings -> cast_input handles this
-    cond do
-      # Boolean type with string value - XTDB often returns "t"/"f"
-      type == Ash.Type.Boolean and is_binary(value) ->
-        coerce_boolean(value)
+    if type == Ash.Type.Atom and is_binary(value) do
+      String.to_atom(value)
+    else
+      # Most primary types (booleans, dates, timestamps, numbers, UTF-8) are
+      # already handled by the connection layer. This handles Ash-specific casts.
+      case Ash.Type.cast_input(type, value, constraints) do
+        {:ok, casted} ->
+          casted
 
-      # Atom type with string value - convert string to atom
-      type == Ash.Type.Atom and is_binary(value) ->
-        String.to_atom(value)
-
-      # Try cast_input first (handles JSON strings for maps, datetime strings, etc.)
-      true ->
-        case Ash.Type.cast_input(type, value, constraints) do
-          {:ok, casted} ->
-            # Decode 4-byte UTF-8 escape sequences (XTDB workaround)
-            decode_utf8_workaround(casted)
-
-          _ ->
-            # Fall back to cast_stored for already-typed values
-            case Ash.Type.cast_stored(type, value, constraints) do
-              {:ok, casted} -> decode_utf8_workaround(casted)
-              :error -> value
-            end
-        end
+        _ ->
+          case Ash.Type.cast_stored(type, value, constraints) do
+            {:ok, casted} -> casted
+            :error -> value
+          end
+      end
     end
   end
 
   def cast_value(value, _type_info), do: value
-
-  @doc """
-  Coerces XTDB boolean string representations to Elixir booleans.
-
-  Note: The connection layer now handles boolean casting via OIDs for most cases.
-  This remains as a safety net for edge cases.
-  """
-  @spec coerce_boolean(term()) :: boolean() | term()
-  def coerce_boolean(value) when value in ["t", "true", "TRUE", "1", "yes", "YES"], do: true
-  def coerce_boolean(value) when value in ["f", "false", "FALSE", "0", "no", "NO", ""], do: false
-  def coerce_boolean(value), do: value
 
   # ============================================================================
   # Aggregate Value Casting
@@ -207,15 +185,10 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
 
   # Count — already an integer from connection layer
   def cast_aggregate_value(value, %{kind: :count}) when is_integer(value), do: value
+  def cast_aggregate_value(value, %{kind: :count}), do: value
 
-  def cast_aggregate_value(value, %{kind: :count}) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, ""} -> int
-      _ -> value
-    end
-  end
-
-  # Sum/Min/Max — pass through already-typed values
+  # Sum/Min/Max — pass through already-typed values; keep is_binary fallback
+  # as safety net for CASE expressions that may return text OID 25
   def cast_aggregate_value(value, %{kind: kind}) when kind in [:sum, :min, :max] do
     if is_binary(value) do
       case Integer.parse(value) do
@@ -233,36 +206,16 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
     end
   end
 
-  # Avg — pass through already-typed numbers
+  # Avg — already a float from connection layer
   def cast_aggregate_value(value, %{kind: :avg}) when is_number(value), do: value
-
-  def cast_aggregate_value(value, %{kind: :avg}) when is_binary(value) do
-    case Float.parse(value) do
-      {float, ""} -> float
-      _ -> value
-    end
-  end
+  def cast_aggregate_value(value, %{kind: :avg}), do: value
 
   # Exists — booleans arrive as booleans from connection layer
-  def cast_aggregate_value(true, %{kind: :exists}), do: true
-  def cast_aggregate_value(false, %{kind: :exists}), do: false
+  def cast_aggregate_value(value, %{kind: :exists}) when is_boolean(value), do: value
+  def cast_aggregate_value(nil, %{kind: :exists}), do: false
+  def cast_aggregate_value(value, %{kind: :exists}), do: !!value
 
-  def cast_aggregate_value(value, %{kind: :exists}) do
-    case value do
-      "t" -> true
-      "f" -> false
-      "true" -> true
-      "false" -> false
-      1 -> true
-      0 -> false
-      "1" -> true
-      "0" -> false
-      nil -> false
-      _ -> !!value
-    end
-  end
-
-  # Statistical aggregates return floats
+  # Statistical aggregates return floats; keep is_binary fallback for edge cases
   def cast_aggregate_value(value, %{kind: kind})
       when kind in [:stddev_pop, :stddev_samp, :var_pop, :var_samp] do
     cond do
@@ -287,23 +240,12 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
   end
 
   # Boolean aggregates — booleans arrive as booleans from connection layer
-  def cast_aggregate_value(true, %{kind: kind}) when kind in [:bool_and, :bool_or], do: true
-  def cast_aggregate_value(false, %{kind: kind}) when kind in [:bool_and, :bool_or], do: false
+  def cast_aggregate_value(value, %{kind: kind})
+      when kind in [:bool_and, :bool_or] and is_boolean(value),
+      do: value
 
-  def cast_aggregate_value(value, %{kind: kind}) when kind in [:bool_and, :bool_or] do
-    case value do
-      "t" -> true
-      "f" -> false
-      "true" -> true
-      "false" -> false
-      1 -> true
-      0 -> false
-      "1" -> true
-      "0" -> false
-      nil -> nil
-      _ -> !!value
-    end
-  end
+  def cast_aggregate_value(nil, %{kind: kind}) when kind in [:bool_and, :bool_or], do: nil
+  def cast_aggregate_value(value, %{kind: kind}) when kind in [:bool_and, :bool_or], do: !!value
 
   def cast_aggregate_value(value, _agg), do: value
 
@@ -359,18 +301,4 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
       constraints
     end
   end
-
-  # Decode 4-byte UTF-8 escape sequences from XTDB workaround
-  defp decode_utf8_workaround(value) when is_binary(value) do
-    AshXTDB.UTF8Workaround.decode(value)
-  end
-
-  # Structs (DateTime, Date, etc.) should pass through unchanged
-  defp decode_utf8_workaround(value) when is_struct(value), do: value
-
-  defp decode_utf8_workaround(value) when is_map(value) do
-    AshXTDB.UTF8Workaround.decode_deep(value)
-  end
-
-  defp decode_utf8_workaround(value), do: value
 end

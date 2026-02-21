@@ -266,11 +266,13 @@ defmodule AshXTDB.DataLayer do
     end)
   end
 
-  # Cast SQL calculation result to the expected type
+  # Cast SQL calculation result to the expected type.
+  # The connection layer handles most type casting via OIDs, but some CASE
+  # expressions return text OID 25, so we keep integer/float/decimal parsing
+  # as safety nets.
   defp cast_calculation_value(nil, _type), do: nil
 
   defp cast_calculation_value(value, type) when is_binary(value) do
-    # XTDB may return numeric results as strings
     resolved_type = Ash.Type.get_type(type)
 
     cond do
@@ -288,9 +290,6 @@ defmodule AshXTDB.DataLayer do
 
       resolved_type in [Ash.Type.Decimal, :decimal] ->
         Decimal.new(value)
-
-      resolved_type in [Ash.Type.Boolean, :boolean] ->
-        value in ["true", "t", "1"]
 
       true ->
         value

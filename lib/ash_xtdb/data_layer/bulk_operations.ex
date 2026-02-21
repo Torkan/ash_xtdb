@@ -53,23 +53,12 @@ defmodule AshXTDB.DataLayer.BulkOperations do
     # Convert stream to list and apply attributes to get full records
     changesets = Enum.to_list(stream)
 
-    # Get attribute names (not relationships)
-    attr_names = resource |> Ash.Resource.Info.attributes() |> Enum.map(& &1.name)
-
     records_with_changesets =
       changesets
       |> Enum.reduce_while({:ok, []}, fn changeset, {:ok, acc} ->
         case Ash.Changeset.apply_attributes(changeset) do
           {:ok, record} ->
-            # Convert struct to map, keeping only attributes (not relationships)
-            record_map =
-              record
-              |> Map.from_struct()
-              |> Map.take(attr_names)
-              |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-              |> Map.new()
-              |> ResultTransformer.map_primary_key_to_id(resource)
-
+            record_map = ResultTransformer.struct_to_record(record, resource)
             {:cont, {:ok, [{record_map, changeset} | acc]}}
 
           {:error, error} ->
@@ -143,7 +132,7 @@ defmodule AshXTDB.DataLayer.BulkOperations do
     return_records? = Map.get(options, :return_records?, false)
 
     # Get the changes and atomics from changeset
-    changes = get_changes(changeset)
+    changes = Map.new(changeset.attributes)
     atomics = changeset.atomics || []
 
     if map_size(changes) == 0 and atomics == [] do
@@ -217,14 +206,5 @@ defmodule AshXTDB.DataLayer.BulkOperations do
       {:error, error} ->
         {:error, Errors.to_ash_error(error)}
     end
-  end
-
-  # ============================================================================
-  # Private Helpers
-  # ============================================================================
-
-  defp get_changes(changeset) do
-    changeset.attributes
-    |> Map.new()
   end
 end

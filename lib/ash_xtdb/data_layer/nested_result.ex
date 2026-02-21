@@ -122,26 +122,7 @@ defmodule AshXTDB.NestedResult do
   # ============================================================================
 
   defp normalize_nested_attrs(attrs, resource) when is_map(attrs) do
-    # Map _id back to the primary key attribute
-    pkey_attrs = Ash.Resource.Info.primary_key(resource)
-
-    case pkey_attrs do
-      [pkey] when pkey != :_id ->
-        case Map.pop(attrs, :_id) do
-          {nil, attrs} ->
-            # Also check string key
-            case Map.pop(attrs, "_id") do
-              {nil, attrs} -> attrs
-              {id_value, attrs} -> Map.put(attrs, pkey, id_value)
-            end
-
-          {id_value, attrs} ->
-            Map.put(attrs, pkey, id_value)
-        end
-
-      _ ->
-        attrs
-    end
+    AshXTDB.DataLayer.ResultTransformer.map_id_to_primary_key(attrs, resource)
   end
 
   defp normalize_nested_attrs(attrs, _resource), do: attrs

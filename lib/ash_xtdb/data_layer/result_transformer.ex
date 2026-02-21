@@ -288,6 +288,83 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
   end
 
   # ============================================================================
+  # Record Building
+  # ============================================================================
+
+  @doc """
+  Extracts a record map from an applied changeset struct.
+
+  Keeps only resource attributes (not relationships), removes nils,
+  and maps the primary key to `_id` for XTDB.
+  """
+  @spec struct_to_record(struct(), Ash.Resource.t()) :: map()
+  def struct_to_record(record, resource) do
+    attr_names = resource |> Ash.Resource.Info.attributes() |> Enum.map(& &1.name)
+
+    record
+    |> Map.from_struct()
+    |> Map.take(attr_names)
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Map.new()
+    |> map_primary_key_to_id(resource)
+  end
+
+  # ============================================================================
+  # Aggregate Query Helpers
+  # ============================================================================
+
+  @doc """
+  Executes an aggregate SQL query and maps results to aggregate names.
+
+  Shared by both `DataLayer.run_aggregate_query/3` and
+  `LateralJoins.run_aggregate_query/3` to avoid duplication.
+  """
+  @spec run_aggregate_query(AshXTDB.SQL.t(), [Ash.Query.Aggregate.t()], Ash.Resource.t()) ::
+          {:ok, map()} | {:error, term()}
+  def run_aggregate_query(query, aggregates, resource) do
+    alias AshXTDB.DataLayer.{Errors, Info}
+    alias AshXTDB.SQL
+
+    repo = Info.repo!(resource)
+    {sql, params} = SQL.to_aggregate_sql(query, aggregates)
+
+    require Logger
+    Logger.debug("AshXTDB Aggregate SQL: #{sql} with params: #{inspect(params)}")
+
+    case repo.query(sql, params) do
+      {:ok, %Postgrex.Result{rows: [row], columns: columns}} ->
+        result =
+          columns
+          |> Enum.zip(row)
+          |> Enum.reduce(%{}, fn {col_name, value}, acc ->
+            agg = Enum.find(aggregates, fn a -> Atom.to_string(a.name) == col_name end)
+
+            if agg do
+              Map.put(acc, agg.name, cast_aggregate_value(value, agg))
+            else
+              acc
+            end
+          end)
+
+        {:ok, result}
+
+      {:ok, %Postgrex.Result{rows: []}} ->
+        {:ok, default_aggregate_result(aggregates)}
+
+      {:error, error} ->
+        {:error, Errors.to_ash_error(error)}
+    end
+  end
+
+  @doc """
+  Builds a default aggregate result map with default values for each aggregate.
+  """
+  @spec default_aggregate_result([Ash.Query.Aggregate.t()]) :: map()
+  def default_aggregate_result(aggregates) do
+    Map.new(aggregates, fn agg -> {agg.name, agg.default_value} end)
+  end
+
+  # ============================================================================
   # Private Helpers
   # ============================================================================
 

@@ -33,7 +33,7 @@ defmodule AshXTDB.DataLayer.Mutations do
     case Ash.Changeset.apply_attributes(changeset) do
       {:ok, applied_record} ->
         # Build record map from applied struct
-        record = build_record_from_struct(applied_record, resource)
+        record = ResultTransformer.struct_to_record(applied_record, resource)
         {sql, params} = SQL.build_insert(table, record, resource)
 
         Logger.debug("AshXTDB INSERT: #{sql} with params: #{inspect(params)}")
@@ -65,7 +65,7 @@ defmodule AshXTDB.DataLayer.Mutations do
     pkey = primary_key_value(changeset.data, resource)
 
     # Get changed attributes and atomics
-    changes = get_changes(changeset)
+    changes = Map.new(changeset.attributes)
     atomics = changeset.atomics || []
 
     if map_size(changes) == 0 and atomics == [] do
@@ -128,32 +128,11 @@ defmodule AshXTDB.DataLayer.Mutations do
   # Private Helpers
   # ============================================================================
 
-  defp build_record_from_struct(record, resource) do
-    # Get attribute names (not relationships)
-    attr_names = resource |> Ash.Resource.Info.attributes() |> Enum.map(& &1.name)
-
-    # Convert struct to map, keeping only attributes (not relationships)
-    attrs =
-      record
-      |> Map.from_struct()
-      |> Map.take(attr_names)
-      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Map.new()
-
-    # Map primary key to _id for XTDB
-    ResultTransformer.map_primary_key_to_id(attrs, resource)
-  end
-
   defp primary_key_value(record, resource) do
     pkey_attrs = Ash.Resource.Info.primary_key(resource)
 
     Map.new(pkey_attrs, fn attr ->
       {attr, Map.get(record, attr)}
     end)
-  end
-
-  defp get_changes(changeset) do
-    changeset.attributes
-    |> Map.new()
   end
 end

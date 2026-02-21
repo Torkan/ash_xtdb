@@ -149,7 +149,6 @@ defmodule AshXTDB.DataLayer do
     ]
 
   require Logger
-  require Ash.Query
 
   alias AshXTDB.DataLayer.BulkOperations
   alias AshXTDB.DataLayer.Capabilities

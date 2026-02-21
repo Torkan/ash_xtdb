@@ -23,8 +23,6 @@ defmodule AshXTDB.Connection do
 
   use DBConnection
 
-  require Logger
-
   @type t :: %__MODULE__{
           socket: :gen_tcp.socket() | nil,
           buffer: binary(),
@@ -417,7 +415,7 @@ defmodule AshXTDB.Connection do
     case buffer do
       <<type::8, length::32, rest::binary>> when byte_size(rest) >= length - 4 ->
         payload_length = length - 4
-        <<payload::binary-size(payload_length), new_buffer::binary>> = rest
+        <<payload::binary-size(^payload_length), new_buffer::binary>> = rest
         {:ok, <<type, length::32, payload::binary>>, %{state | buffer: new_buffer}}
 
       _ ->
@@ -433,7 +431,7 @@ defmodule AshXTDB.Connection do
 
   defp parse_row_description(<<?T, length::32, rest::binary>>) do
     payload_length = length - 4
-    <<payload::binary-size(payload_length), _::binary>> = rest
+    <<payload::binary-size(^payload_length), _::binary>> = rest
     <<num_fields::16, fields_data::binary>> = payload
 
     {columns, _} =
@@ -451,7 +449,7 @@ defmodule AshXTDB.Connection do
 
   defp parse_data_row(<<?D, length::32, rest::binary>>) do
     payload_length = length - 4
-    <<payload::binary-size(payload_length), _::binary>> = rest
+    <<payload::binary-size(^payload_length), _::binary>> = rest
     <<num_fields::16, fields_data::binary>> = payload
 
     {values, _} =
@@ -461,7 +459,7 @@ defmodule AshXTDB.Connection do
         if field_length == -1 do
           {[nil | vals], remaining}
         else
-          <<value::binary-size(field_length), rest::binary>> = remaining
+          <<value::binary-size(^field_length), rest::binary>> = remaining
           {[value | vals], rest}
         end
       end)
@@ -471,7 +469,7 @@ defmodule AshXTDB.Connection do
 
   defp parse_error(<<?E, length::32, rest::binary>>) do
     payload_length = length - 4
-    <<payload::binary-size(payload_length), _::binary>> = rest
+    <<payload::binary-size(^payload_length), _::binary>> = rest
     fields = parse_error_fields(payload, %{})
 
     %Postgrex.Error{

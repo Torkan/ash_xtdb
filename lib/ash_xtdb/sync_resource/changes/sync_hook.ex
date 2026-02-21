@@ -40,8 +40,6 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
 
   use Ash.Resource.Change
 
-  require Logger
-
   @impl true
   def atomic(changeset, opts, context) do
     {:ok, change(changeset, opts, context)}

@@ -41,6 +41,7 @@ defmodule AshXTDB.SQL.Nested do
       {select_sql, params} = Nested.build_nested_select(query, [nested])
   """
 
+  alias AshXTDB.SQL.Core
   alias AshXTDB.SQL.Filter
 
   @parent_alias "t"
@@ -169,12 +170,12 @@ defmodule AshXTDB.SQL.Nested do
          subquery_alias
        ) do
     # Build: n.id IN (SELECT pt.tag_id FROM post_tags pt WHERE pt.post_id = t._id)
-    dest_col = format_column(subquery_alias, destination_attribute)
-    parent_col = format_column(parent_alias, source_attribute)
+    dest_col = Core.to_select_column_name(destination_attribute, subquery_alias)
+    parent_col = Core.to_select_column_name(source_attribute, parent_alias)
 
     through_alias = "th"
-    through_dest_col = format_column(through_alias, dest_attr_on_join)
-    through_source_col = format_column(through_alias, source_attr_on_join)
+    through_dest_col = Core.to_select_column_name(dest_attr_on_join, through_alias)
+    through_source_col = Core.to_select_column_name(source_attr_on_join, through_alias)
 
     quoted_through_table = AshXTDB.SQL.quote_identifier(through_table)
 
@@ -186,8 +187,8 @@ defmodule AshXTDB.SQL.Nested do
 
   # Simple correlation: parent.attr = child.attr
   defp build_correlation_condition({parent_attr, child_attr}, parent_alias, subquery_alias) do
-    parent_col = format_column(parent_alias, parent_attr)
-    child_col = format_column(subquery_alias, child_attr)
+    parent_col = Core.to_select_column_name(parent_attr, parent_alias)
+    child_col = Core.to_select_column_name(child_attr, subquery_alias)
     {"#{child_col} = #{parent_col}", []}
   end
 
@@ -206,8 +207,8 @@ defmodule AshXTDB.SQL.Nested do
       end
 
     columns
-    |> ensure_id_column()
-    |> Enum.map_join(", ", &format_column(@parent_alias, &1))
+    |> Core.ensure_id_column()
+    |> Enum.map_join(", ", &Core.to_select_column_name(&1, @parent_alias))
   end
 
   defp build_nested_columns([], _query), do: {"", []}
@@ -236,8 +237,8 @@ defmodule AshXTDB.SQL.Nested do
 
     column_list =
       columns
-      |> ensure_id_column()
-      |> Enum.map_join(", ", &format_column(subquery_alias, &1))
+      |> Core.ensure_id_column()
+      |> Enum.map_join(", ", &Core.to_select_column_name(&1, subquery_alias))
 
     "SELECT #{column_list}"
   end
@@ -248,12 +249,23 @@ defmodule AshXTDB.SQL.Nested do
   defp build_subquery_order(%{sort: sort}, subquery_alias) do
     clauses =
       Enum.map_join(sort, ", ", fn
-        {field, :asc} -> "#{format_column(subquery_alias, field)} ASC"
-        {field, :desc} -> "#{format_column(subquery_alias, field)} DESC"
-        {field, :asc_nils_first} -> "#{format_column(subquery_alias, field)} ASC NULLS FIRST"
-        {field, :asc_nils_last} -> "#{format_column(subquery_alias, field)} ASC NULLS LAST"
-        {field, :desc_nils_first} -> "#{format_column(subquery_alias, field)} DESC NULLS FIRST"
-        {field, :desc_nils_last} -> "#{format_column(subquery_alias, field)} DESC NULLS LAST"
+        {field, :asc} ->
+          "#{Core.to_select_column_name(field, subquery_alias)} ASC"
+
+        {field, :desc} ->
+          "#{Core.to_select_column_name(field, subquery_alias)} DESC"
+
+        {field, :asc_nils_first} ->
+          "#{Core.to_select_column_name(field, subquery_alias)} ASC NULLS FIRST"
+
+        {field, :asc_nils_last} ->
+          "#{Core.to_select_column_name(field, subquery_alias)} ASC NULLS LAST"
+
+        {field, :desc_nils_first} ->
+          "#{Core.to_select_column_name(field, subquery_alias)} DESC NULLS FIRST"
+
+        {field, :desc_nils_last} ->
+          "#{Core.to_select_column_name(field, subquery_alias)} DESC NULLS LAST"
       end)
 
     "ORDER BY #{clauses}"
@@ -269,20 +281,4 @@ defmodule AshXTDB.SQL.Nested do
   defp build_subquery_offset(%{offset: 0}), do: nil
   defp build_subquery_offset(%{offset: offset}), do: "OFFSET #{offset} ROWS"
   defp build_subquery_offset(_), do: nil
-
-  defp format_column(table_alias, :id), do: "#{table_alias}.\"_id\""
-  defp format_column(table_alias, :_id), do: "#{table_alias}.\"_id\""
-
-  defp format_column(table_alias, attr) when is_atom(attr) do
-    quoted_col = AshXTDB.SQL.quote_identifier(Atom.to_string(attr))
-    "#{table_alias}.#{quoted_col}"
-  end
-
-  defp ensure_id_column(columns) do
-    if :id in columns || :_id in columns do
-      columns
-    else
-      [:_id | columns]
-    end
-  end
 end

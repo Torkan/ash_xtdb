@@ -10,19 +10,21 @@ defmodule AshXTDB.SQL.Filter do
   """
 
   alias AshXTDB.DataLayer.Info
+  alias AshXTDB.SQL.Core
 
   # Default table alias used in queries for the main table
   @default_table_alias "t"
 
   @doc """
-  Test helper to expose expression_to_sql for unit testing.
+  Translates a single Ash expression to SQL.
 
-  This function is only intended for testing purposes to verify SQL generation
-  for individual expression types without going through the full filter pipeline.
+  Used both internally and by other modules (e.g., DML.Update for atomic
+  expressions, SQL for calculation expressions) that need to convert individual
+  expressions outside the full filter pipeline.
   """
-  @spec expression_to_sql_for_test(term(), map()) :: {String.t() | nil, map()}
-  def expression_to_sql_for_test(expr, state) do
-    expression_to_sql(expr, state)
+  @spec expression_to_sql(term(), map()) :: {String.t() | nil, map()}
+  def expression_to_sql(expr, state) do
+    do_expression_to_sql(expr, state)
   end
 
   @doc """
@@ -96,7 +98,10 @@ defmodule AshXTDB.SQL.Filter do
   # Expression Translation
   # ============================================================================
 
-  defp expression_to_sql(%Ash.Query.BooleanExpression{op: :and, left: left, right: right}, state) do
+  defp do_expression_to_sql(
+         %Ash.Query.BooleanExpression{op: :and, left: left, right: right},
+         state
+       ) do
     {left_sql, state} = expression_to_sql(left, state)
     {right_sql, state} = expression_to_sql(right, state)
 
@@ -107,7 +112,10 @@ defmodule AshXTDB.SQL.Filter do
     end
   end
 
-  defp expression_to_sql(%Ash.Query.BooleanExpression{op: :or, left: left, right: right}, state) do
+  defp do_expression_to_sql(
+         %Ash.Query.BooleanExpression{op: :or, left: left, right: right},
+         state
+       ) do
     {left_sql, state} = expression_to_sql(left, state)
     {right_sql, state} = expression_to_sql(right, state)
 
@@ -118,7 +126,7 @@ defmodule AshXTDB.SQL.Filter do
     end
   end
 
-  defp expression_to_sql(%Ash.Query.Not{expression: expr}, state) do
+  defp do_expression_to_sql(%Ash.Query.Not{expression: expr}, state) do
     {sql, state} = expression_to_sql(expr, state)
 
     if sql do
@@ -128,7 +136,7 @@ defmodule AshXTDB.SQL.Filter do
     end
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.Eq{left: left, right: right}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.Eq{left: left, right: right}, state) do
     {left_sql, state} = ref_or_value_to_sql(left, state)
     {right_sql, state} = ref_or_value_to_sql(right, state)
 
@@ -142,7 +150,7 @@ defmodule AshXTDB.SQL.Filter do
     {sql, state}
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.NotEq{left: left, right: right}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.NotEq{left: left, right: right}, state) do
     {left_sql, state} = ref_or_value_to_sql(left, state)
     {right_sql, state} = ref_or_value_to_sql(right, state)
 
@@ -156,23 +164,26 @@ defmodule AshXTDB.SQL.Filter do
     {sql, state}
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.LessThan{left: left, right: right}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.LessThan{left: left, right: right}, state) do
     binary_op_to_sql("<", left, right, state)
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.LessThanOrEqual{left: left, right: right}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.LessThanOrEqual{left: left, right: right}, state) do
     binary_op_to_sql("<=", left, right, state)
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.GreaterThan{left: left, right: right}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.GreaterThan{left: left, right: right}, state) do
     binary_op_to_sql(">", left, right, state)
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.GreaterThanOrEqual{left: left, right: right}, state) do
+  defp do_expression_to_sql(
+         %Ash.Query.Operator.GreaterThanOrEqual{left: left, right: right},
+         state
+       ) do
     binary_op_to_sql(">=", left, right, state)
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.In{left: left, right: right}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.In{left: left, right: right}, state) do
     {left_sql, state} = ref_or_value_to_sql(left, state)
 
     case right do
@@ -189,12 +200,12 @@ defmodule AshXTDB.SQL.Filter do
     end
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.IsNil{left: left, right: true}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.IsNil{left: left, right: true}, state) do
     {left_sql, state} = ref_or_value_to_sql(left, state)
     {"#{left_sql} IS NULL", state}
   end
 
-  defp expression_to_sql(%Ash.Query.Operator.IsNil{left: left, right: false}, state) do
+  defp do_expression_to_sql(%Ash.Query.Operator.IsNil{left: left, right: false}, state) do
     {left_sql, state} = ref_or_value_to_sql(left, state)
     {"#{left_sql} IS NOT NULL", state}
   end
@@ -205,7 +216,7 @@ defmodule AshXTDB.SQL.Filter do
 
   # String operators - Contains (LIKE with wildcards on both sides)
   # This handles Ash's contains(field, "substring") function
-  defp expression_to_sql(%Ash.Query.Function.Contains{arguments: [left, right]}, state) do
+  defp do_expression_to_sql(%Ash.Query.Function.Contains{arguments: [left, right]}, state) do
     {left_sql, state} = ref_or_value_to_sql(left, state)
     {right_sql, state} = ref_or_value_to_sql(right, state)
     {"#{left_sql} LIKE '%' || #{right_sql} || '%'", state}
@@ -218,25 +229,26 @@ defmodule AshXTDB.SQL.Filter do
   # Handle Ash.Query.Exists - generates EXISTS subquery
   # Example: exists(posts, title == "Hello") becomes:
   # EXISTS (SELECT 1 FROM posts sub WHERE sub.user_id = t._id AND sub.title = 'Hello')
-  defp expression_to_sql(%Ash.Query.Exists{path: path, expr: expr}, state) when is_list(path) do
+  defp do_expression_to_sql(%Ash.Query.Exists{path: path, expr: expr}, state)
+       when is_list(path) do
     exists_to_sql(path, expr, state)
   end
 
   # Handle Ash.Resource.Calculation.Expression - expand the expression
   # Uses map pattern to avoid compile-time struct expansion issues
-  defp expression_to_sql(%{__struct__: struct_name, expression: expr}, state)
+  defp do_expression_to_sql(%{__struct__: struct_name, expression: expr}, state)
        when struct_name == Ash.Resource.Calculation.Expression do
     expression_to_sql(expr, state)
   end
 
   # Handle Ash.Query.Call for function calls like string_downcase, string_length, etc.
-  defp expression_to_sql(%Ash.Query.Call{name: name, args: args}, state) do
+  defp do_expression_to_sql(%Ash.Query.Call{name: name, args: args}, state) do
     call_to_sql(name, args, state)
   end
 
   # Handle Ash Query Functions and Operators dynamically by checking the struct name
   # This avoids compile-time issues with struct expansion
-  defp expression_to_sql(%{__struct__: struct_name} = expr, state) do
+  defp do_expression_to_sql(%{__struct__: struct_name} = expr, state) do
     struct_string = to_string(struct_name)
 
     cond do
@@ -416,11 +428,11 @@ defmodule AshXTDB.SQL.Filter do
   end
 
   # Boolean literals - `true` means "no filter" (passthrough), `false` means "always false"
-  defp expression_to_sql(true, state), do: {nil, state}
-  defp expression_to_sql(false, state), do: {"FALSE", state}
+  defp do_expression_to_sql(true, state), do: {nil, state}
+  defp do_expression_to_sql(false, state), do: {"FALSE", state}
 
   # Catch-all for unhandled non-struct expressions
-  defp expression_to_sql(expr, state)
+  defp do_expression_to_sql(expr, state)
        when not is_map(expr) or not is_map_key(expr, :__struct__) do
     require Logger
     Logger.warning("Unhandled filter expression: #{inspect(expr)}")
@@ -1182,7 +1194,7 @@ defmodule AshXTDB.SQL.Filter do
           nil ->
             # No expression, can't filter by this calculation in SQL
             attr_name = get_attr_name(attr)
-            column = column_name(attr_name, table_alias)
+            column = Core.to_select_column_name(attr_name, table_alias)
             {column, state}
 
           expr ->
@@ -1200,7 +1212,7 @@ defmodule AshXTDB.SQL.Filter do
 
       _ ->
         attr_name = get_attr_name(attr)
-        column = column_name(attr_name, table_alias)
+        column = Core.to_select_column_name(attr_name, table_alias)
         {column, state}
     end
   end
@@ -1283,7 +1295,7 @@ defmodule AshXTDB.SQL.Filter do
     case Map.get(agg_alias_map, name) do
       nil ->
         # Not an aggregate, treat as regular column
-        column = column_name(name, state.table_alias)
+        column = Core.to_select_column_name(name, state.table_alias)
         {column, state}
 
       agg_expr ->
@@ -1299,7 +1311,7 @@ defmodule AshXTDB.SQL.Filter do
     case Map.get(agg_alias_map, name) do
       nil ->
         # Not an aggregate, treat as regular column
-        column = column_name(name, state.table_alias)
+        column = Core.to_select_column_name(name, state.table_alias)
         {column, state}
 
       agg_expr ->
@@ -1557,14 +1569,4 @@ defmodule AshXTDB.SQL.Filter do
 
   defp get_attr_name(%{name: name}), do: name
   defp get_attr_name(name) when is_atom(name), do: name
-
-  # Column names with table alias for XTDB
-  # All column names are quoted to prevent SQL injection
-  defp column_name(:id, alias), do: "#{alias}.\"_id\""
-  defp column_name(:_id, alias), do: "#{alias}.\"_id\""
-
-  defp column_name(name, alias) do
-    quoted_col = AshXTDB.SQL.quote_identifier(Atom.to_string(name))
-    "#{alias}.#{quoted_col}"
-  end
 end

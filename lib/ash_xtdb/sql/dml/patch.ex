@@ -43,6 +43,7 @@ defmodule AshXTDB.SQL.DML.Patch do
 
   alias AshXTDB.DataLayer.Info
   alias AshXTDB.SQL
+  alias AshXTDB.SQL.Core
   alias AshXTDB.SQL.Temporal
 
   @type patch_option ::
@@ -123,7 +124,7 @@ defmodule AshXTDB.SQL.DML.Patch do
   def build_patch_sql(table, records, valid_from, valid_to) do
     records_clause = build_records_clause(records)
     valid_time_clause = Temporal.build_valid_time_clause(valid_from, valid_to)
-    quoted_table = AshXTDB.SQL.quote_identifier(table)
+    quoted_table = SQL.quote_identifier(table)
 
     if valid_time_clause do
       "PATCH INTO #{quoted_table} #{valid_time_clause} RECORDS #{records_clause}"
@@ -170,31 +171,10 @@ defmodule AshXTDB.SQL.DML.Patch do
       Enum.map_join(record, ", ", fn {key, value} ->
         # Map :id to :_id for XTDB
         xtdb_key = if key == :id, do: :_id, else: key
-        "#{xtdb_key}: #{format_value(value)}"
+        "#{xtdb_key}: #{Core.escape_value(value)}"
       end)
 
     "{#{entries}}"
-  end
-
-  # Format a value for XTDB SQL
-  defp format_value(nil), do: "NULL"
-  defp format_value(value) when is_binary(value), do: SQL.escape_value(value)
-  defp format_value(value) when is_integer(value), do: Integer.to_string(value)
-  defp format_value(value) when is_float(value), do: Float.to_string(value)
-  defp format_value(true), do: "true"
-  defp format_value(false), do: "false"
-
-  defp format_value(%DateTime{} = dt) do
-    "TIMESTAMP '#{DateTime.to_iso8601(dt)}'"
-  end
-
-  defp format_value(%Date{} = d) do
-    "DATE '#{Date.to_iso8601(d)}'"
-  end
-
-  defp format_value(value) do
-    # Fallback: use SQL.escape_value for complex types
-    SQL.escape_value(value)
   end
 
   @doc """

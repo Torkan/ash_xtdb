@@ -53,12 +53,10 @@ defmodule AshXTDB.Types.Interval do
   def cast_input(%__MODULE__{} = interval, _), do: {:ok, interval}
 
   def cast_input(value, _) when is_binary(value) do
-    cond do
-      String.starts_with?(value, "P") ->
-        parse_iso(value)
-
-      true ->
-        parse_sql(value)
+    if String.starts_with?(value, "P") do
+      parse_iso(value)
+    else
+      parse_sql(value)
     end
   end
 

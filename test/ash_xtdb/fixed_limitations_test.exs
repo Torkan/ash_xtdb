@@ -15,7 +15,7 @@ defmodule AshXTDB.FixedLimitationsTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.{Organization, User, Post, Comment, Tag, PostTag, Project, UserProject}
+  alias AshXTDB.Test.{Comment, Organization, Post, PostTag, Project, Tag, User, UserProject}
 
   require Ash.Query
 

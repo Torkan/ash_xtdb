@@ -13,7 +13,7 @@ defmodule AshXTDB.LateralJoinTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.{User, Post, Tag, PostTag}
+  alias AshXTDB.Test.{Post, PostTag, Tag, User}
 
   require Ash.Query
 

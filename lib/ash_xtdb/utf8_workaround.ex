@@ -71,8 +71,7 @@ defmodule AshXTDB.UTF8Workaround do
   def encode(string) when is_binary(string) do
     string
     |> String.codepoints()
-    |> Enum.map(&encode_codepoint/1)
-    |> Enum.join()
+    |> Enum.map_join(&encode_codepoint/1)
   end
 
   @doc """

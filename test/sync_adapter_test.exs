@@ -19,7 +19,9 @@ defmodule AshXTDB.SyncAdapterTest do
       original = Application.get_env(:ash_xtdb, :sync_adapter)
 
       try do
-        Application.put_env(:ash_xtdb, :sync_adapter,
+        Application.put_env(
+          :ash_xtdb,
+          :sync_adapter,
           {AshXTDB.SyncAdapters.Oban, oban: MyApp.Oban, queue: :custom}
         )
 

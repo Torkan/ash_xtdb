@@ -87,7 +87,7 @@ defmodule AshXTDB.Test.Project do
               expr(
                 cond do
                   is_nil(budget) -> "Unbudgeted"
-                  budget < 10000 -> "Small"
+                  budget < 10_000 -> "Small"
                   budget < 100_000 -> "Medium"
                   budget < 1_000_000 -> "Large"
                   true -> "Enterprise"

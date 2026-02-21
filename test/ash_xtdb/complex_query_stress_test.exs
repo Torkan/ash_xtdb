@@ -11,7 +11,7 @@ defmodule AshXTDB.ComplexQueryStressTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.{Organization, User, Post}
+  alias AshXTDB.Test.{Organization, Post, User}
 
   require Ash.Query
 

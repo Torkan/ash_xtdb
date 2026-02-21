@@ -161,21 +161,17 @@ defmodule AshXTDB.SQL.DML.Patch do
 
   # Build the RECORDS clause with XTDB map syntax
   defp build_records_clause(records) do
-    records
-    |> Enum.map(&record_to_xtdb_map/1)
-    |> Enum.join(", ")
+    Enum.map_join(records, ", ", &record_to_xtdb_map/1)
   end
 
   # Convert an Elixir map to XTDB's map literal syntax
   defp record_to_xtdb_map(record) do
     entries =
-      record
-      |> Enum.map(fn {key, value} ->
+      Enum.map_join(record, ", ", fn {key, value} ->
         # Map :id to :_id for XTDB
         xtdb_key = if key == :id, do: :_id, else: key
         "#{xtdb_key}: #{format_value(value)}"
       end)
-      |> Enum.join(", ")
 
     "{#{entries}}"
   end

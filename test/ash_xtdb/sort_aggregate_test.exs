@@ -13,8 +13,8 @@ defmodule AshXTDB.SortAggregateTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.User
   alias AshXTDB.Test.Post
+  alias AshXTDB.Test.User
 
   require Ash.Query
 

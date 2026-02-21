@@ -21,6 +21,8 @@ defmodule AshXTDB.DataLayer.Errors do
   Other errors are converted using `Ash.Error.to_ash_error/1`.
   """
 
+  alias Ash.Error.Query.InvalidQuery
+
   @doc """
   Converts a database error to an Ash error.
 
@@ -51,7 +53,7 @@ defmodule AshXTDB.DataLayer.Errors do
       "42601" ->
         Ash.Error.Invalid.exception(
           errors: [
-            Ash.Error.Query.InvalidQuery.exception(
+            InvalidQuery.exception(
               query: nil,
               message: "SQL syntax error: #{message}"
             )
@@ -62,7 +64,7 @@ defmodule AshXTDB.DataLayer.Errors do
       "42P01" ->
         Ash.Error.Invalid.exception(
           errors: [
-            Ash.Error.Query.InvalidQuery.exception(
+            InvalidQuery.exception(
               query: nil,
               message: "Table does not exist: #{message}"
             )
@@ -73,7 +75,7 @@ defmodule AshXTDB.DataLayer.Errors do
       "42703" ->
         Ash.Error.Invalid.exception(
           errors: [
-            Ash.Error.Query.InvalidQuery.exception(
+            InvalidQuery.exception(
               query: nil,
               message: "Column does not exist: #{message}"
             )
@@ -84,7 +86,7 @@ defmodule AshXTDB.DataLayer.Errors do
       "42804" ->
         Ash.Error.Invalid.exception(
           errors: [
-            Ash.Error.Query.InvalidQuery.exception(
+            InvalidQuery.exception(
               query: nil,
               message: "Data type mismatch: #{message}"
             )

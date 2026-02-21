@@ -10,10 +10,10 @@ defmodule AshXTDB.AdvancedTemporalTest do
   """
   use ExUnit.Case, async: false
 
+  alias AshXTDB.Changeset
+  alias AshXTDB.Query
   alias AshXTDB.SQL
   alias AshXTDB.SQL.DML.Patch
-  alias AshXTDB.Query
-  alias AshXTDB.Changeset
   alias AshXTDB.Test.User
 
   @moduletag :integration
@@ -57,7 +57,7 @@ defmodule AshXTDB.AdvancedTemporalTest do
           # Verify the update worked by querying at different times
           # Current time should still show the user
           users = Ash.read!(User)
-          assert length(users) >= 1
+          assert users != []
 
         {:error, error} ->
           flunk("UPDATE FOR PORTION OF failed: #{inspect(error)}")

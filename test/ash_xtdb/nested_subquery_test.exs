@@ -9,9 +9,9 @@ defmodule AshXTDB.NestedSubqueryTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.{User, Post, Tag}
-  alias AshXTDB.SQL.Nested
   alias AshXTDB.NestedResult
+  alias AshXTDB.SQL.Nested
+  alias AshXTDB.Test.{Post, Tag, User}
 
   require Ash.Query
 

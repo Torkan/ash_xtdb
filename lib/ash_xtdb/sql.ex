@@ -76,7 +76,7 @@ defmodule AshXTDB.SQL do
           type: :nest_many | :nest_one,
           resource: Ash.Resource.t(),
           table: String.t(),
-          correlation: {atom(), atom()},
+          correlation: {atom(), atom()} | {:through_subquery, map()},
           select: list(atom()) | nil,
           filter: Ash.Filter.t() | nil,
           sort: list() | nil,
@@ -442,12 +442,10 @@ defmodule AshXTDB.SQL do
 
     # Build PARTITION BY clause from distinct fields
     partition_cols =
-      distinct
-      |> Enum.map(fn
+      Enum.map_join(distinct, ", ", fn
         {field, _direction} -> to_select_column_name(field, @table_alias)
         field when is_atom(field) -> to_select_column_name(field, @table_alias)
       end)
-      |> Enum.join(", ")
 
     # Build aggregate joins for both sort and filter
     {agg_join_clauses, agg_alias_map} = build_aggregate_joins(inner_query)
@@ -458,15 +456,13 @@ defmodule AshXTDB.SQL do
         build_order_for_window(sort, resource, inner_query, agg_alias_map)
       else
         # Default to ordering by distinct fields
-        distinct
-        |> Enum.map(fn
+        Enum.map_join(distinct, ", ", fn
           {field, direction} ->
             "#{to_select_column_name(field, @table_alias)} #{direction_to_sql(direction)}"
 
           field ->
             "#{to_select_column_name(field, @table_alias)} ASC"
         end)
-        |> Enum.join(", ")
       end
 
     # Build the inner SELECT with ROW_NUMBER
@@ -523,23 +519,19 @@ defmodule AshXTDB.SQL do
 
   # Build ORDER BY clause for use inside the window function
   defp build_order_for_window(sort, resource, query, agg_alias_map) do
-    sort
-    |> Enum.map(fn {field, direction} ->
+    Enum.map_join(sort, ", ", fn {field, direction} ->
       expr_sql = sort_field_to_sql(field, resource, query, agg_alias_map)
       "#{expr_sql}#{direction_to_sql(direction)}"
     end)
-    |> Enum.join(", ")
   end
 
   # Build ORDER BY for the outer query (using sub. alias)
   defp build_order_for_outer_distinct(sort, resource, _query) do
     clauses =
-      sort
-      |> Enum.map(fn {field, direction} ->
+      Enum.map_join(sort, ", ", fn {field, direction} ->
         col_name = get_sort_field_name(field, resource)
         "sub.#{quote_identifier(col_name)}#{direction_to_sql(direction)}"
       end)
-      |> Enum.join(", ")
 
     "ORDER BY #{clauses}"
   end
@@ -561,12 +553,11 @@ defmodule AshXTDB.SQL do
       attrs
       |> Enum.map(& &1.name)
       |> ensure_id_column()
-      |> Enum.map(fn
+      |> Enum.map_join(", ", fn
         :id -> "sub.\"_id\" AS \"_id\""
         :_id -> "sub.\"_id\""
         attr -> "sub.#{quote_identifier(Atom.to_string(attr))}"
       end)
-      |> Enum.join(", ")
 
     if calc_sql && calc_sql != "" do
       # Include calculation columns

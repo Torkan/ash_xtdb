@@ -218,25 +218,23 @@ defmodule AshXTDB.NestedResult do
     # - Atoms come as strings -> need String.to_atom
     # - Maps may come as JSON strings -> cast_input handles this
     # - DateTimes come as strings -> cast_input handles this
-    cond do
+    if type == Ash.Type.Atom and is_binary(value) do
       # Atom type with string value - convert string to atom
-      type == Ash.Type.Atom and is_binary(value) ->
-        String.to_atom(value)
-
+      String.to_atom(value)
+    else
       # Try cast_input first (handles JSON strings for maps, datetime strings, etc.)
-      true ->
-        case Ash.Type.cast_input(type, value, constraints) do
-          {:ok, casted} ->
-            # Decode 4-byte UTF-8 escape sequences (XTDB workaround)
-            decode_utf8_workaround(casted)
+      case Ash.Type.cast_input(type, value, constraints) do
+        {:ok, casted} ->
+          # Decode 4-byte UTF-8 escape sequences (XTDB workaround)
+          decode_utf8_workaround(casted)
 
-          _ ->
-            # Fall back to cast_stored for already-typed values
-            case Ash.Type.cast_stored(type, value, constraints) do
-              {:ok, casted} -> decode_utf8_workaround(casted)
-              :error -> value
-            end
-        end
+        _ ->
+          # Fall back to cast_stored for already-typed values
+          case Ash.Type.cast_stored(type, value, constraints) do
+            {:ok, casted} -> decode_utf8_workaround(casted)
+            :error -> value
+          end
+      end
     end
   end
 

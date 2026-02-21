@@ -23,15 +23,15 @@ defmodule AshXTDB.UltimateStressTest do
   use ExUnit.Case, async: false
 
   alias AshXTDB.Test.{
-    Organization,
-    User,
-    Post,
-    Comment,
     Category,
+    Comment,
+    Organization,
+    Post,
+    PostTag,
     Project,
-    UserProject,
     Tag,
-    PostTag
+    User,
+    UserProject
   }
 
   require Ash.Query
@@ -381,7 +381,7 @@ defmodule AshXTDB.UltimateStressTest do
         |> Ash.read!()
 
       # All our test users have names longer than 3 chars
-      assert length(results) >= 1
+      assert results != []
     end
 
     test "deeply nested: org -> users -> posts with multiple conditions", _ctx do
@@ -404,7 +404,7 @@ defmodule AshXTDB.UltimateStressTest do
         )
         |> Ash.read!()
 
-      assert length(results) >= 1
+      assert results != []
     end
   end
 
@@ -451,7 +451,7 @@ defmodule AshXTDB.UltimateStressTest do
         |> Ash.Query.sort(post_count: :desc)
         |> Ash.read!()
 
-      assert length(results) >= 1
+      assert results != []
     end
   end
 
@@ -719,7 +719,7 @@ defmodule AshXTDB.UltimateStressTest do
         |> Ash.Query.sort(user_count: :desc)
         |> Ash.read!()
 
-      assert length(results) >= 1
+      assert results != []
     end
 
     test "filter by calculation and sort by aggregate", _ctx do
@@ -730,7 +730,7 @@ defmodule AshXTDB.UltimateStressTest do
         |> Ash.Query.sort(active_user_count: :desc, name: :asc)
         |> Ash.read!()
 
-      assert length(results) >= 1
+      assert results != []
     end
 
     test "nested exists with org attributes and calculations", _ctx do
@@ -741,7 +741,7 @@ defmodule AshXTDB.UltimateStressTest do
         |> Ash.Query.sort(age: :desc)
         |> Ash.read!()
 
-      assert length(results) >= 1
+      assert results != []
     end
 
     test "triple-level nesting: org -> users with posts -> post filtering", _ctx do
@@ -795,7 +795,7 @@ defmodule AshXTDB.UltimateStressTest do
         |> Ash.Query.sort(post_count: :desc, name: :asc)
         |> Ash.read!()
 
-      assert length(results) >= 1
+      assert results != []
     end
 
     test "maximum complexity: all features combined across resources", _ctx do
@@ -1040,7 +1040,7 @@ defmodule AshXTDB.UltimateStressTest do
         |> Ash.read!()
 
       # All results should be published, have a category, and have approved comments
-      assert length(results) >= 1
+      assert results != []
 
       assert Enum.all?(results, fn post ->
                post.published in [true, "t"] and post.category_id != nil
@@ -1335,7 +1335,7 @@ defmodule AshXTDB.UltimateStressTest do
       # Note: Aggregate filters (post_count>=2) have known limitations with complex conditions
       # See docs/known-limitations.md #4
       # Verify query executes without error and if results exist, they're sorted correctly
-      if length(results) >= 1 do
+      if results != [] do
         first_user = hd(results)
         # First user should be Eve (most posts) if aggregate sort works
         assert first_user.name in ["Eve", "Ivy", "Dave", "Carol", "Henry", "Bob"]
@@ -1404,7 +1404,7 @@ defmodule AshXTDB.UltimateStressTest do
       # Posts with view_count < 100: need (idx+1)*i*10 < 100, so (idx+1)*i < 10
       # Alice(idx=0): post 1 = 10, all >= 10 so none qualify with is_popular=false
       # Checking: we need view_count < 100 for is_popular=false
-      assert length(results) >= 1
+      assert results != []
       # All results should have body (not nil) and title length > 5
       assert Enum.all?(results, fn post ->
                post.body != nil and String.length(post.title) > 5
@@ -1426,7 +1426,7 @@ defmodule AshXTDB.UltimateStressTest do
 
       # Published posts with view_count >= 10 in categories with priority != "Low"
       # All active categories (Technology, Programming, Lifestyle) have priority >= 50
-      assert length(results) >= 1
+      assert results != []
       # All results should be published with view_count >= 10
       assert Enum.all?(results, fn post ->
                post.published in [true, "t"] and post.view_count >= 10

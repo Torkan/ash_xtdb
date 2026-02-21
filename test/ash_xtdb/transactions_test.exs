@@ -159,7 +159,7 @@ defmodule AshXTDB.TransactionsTest do
 
       # Verify user was destroyed
       users = Ash.read!(User)
-      assert length(users) == 0
+      assert users == []
     end
   end
 end

@@ -60,7 +60,15 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
         {:ok, result}
       else
         sync_context =
-          build_sync_context(changeset, context, result, action_type, valid_from_opt, valid_to_opt)
+          build_sync_context(
+            changeset,
+            context,
+            result,
+            action_type,
+            valid_from_opt,
+            valid_to_opt
+          )
+
         sync_data = build_sync_data(action_type, result, changeset)
 
         sync_result =

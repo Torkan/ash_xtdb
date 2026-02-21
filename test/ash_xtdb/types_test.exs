@@ -8,11 +8,11 @@ defmodule AshXTDB.TypesTest do
   """
   use ExUnit.Case, async: false
 
+  alias AshXTDB.SQL
   alias AshXTDB.Types.Duration
   alias AshXTDB.Types.Interval
   alias AshXTDB.Types.Period
   alias AshXTDB.Types.URI, as: URIType
-  alias AshXTDB.SQL
 
   @moduletag :integration
 
@@ -239,7 +239,7 @@ defmodule AshXTDB.TypesTest do
 
     test "calculates duration in seconds" do
       period = Period.new(~U[2024-01-01 00:00:00Z], ~U[2024-01-02 00:00:00Z])
-      assert Period.duration_seconds(period) == 86400
+      assert Period.duration_seconds(period) == 86_400
     end
 
     test "converts to SQL format" do

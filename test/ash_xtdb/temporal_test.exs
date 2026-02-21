@@ -4,9 +4,9 @@
 defmodule AshXTDB.TemporalTest do
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.User
-  alias AshXTDB.Query
   alias AshXTDB.Changeset
+  alias AshXTDB.Query
+  alias AshXTDB.Test.User
 
   require Ash.Query
 
@@ -81,7 +81,7 @@ defmodule AshXTDB.TemporalTest do
         |> Ash.read!()
 
       # Should see all versions
-      assert length(users) >= 1
+      assert users != []
       emails = Enum.map(users, & &1.email)
       assert "history@test.com" in emails
     end
@@ -104,7 +104,7 @@ defmodule AshXTDB.TemporalTest do
         |> Query.for_valid_time_between(from_time, to_time)
         |> Ash.read!()
 
-      assert length(users) >= 1
+      assert users != []
     end
   end
 
@@ -164,7 +164,7 @@ defmodule AshXTDB.TemporalTest do
         |> Query.for_all_system_time()
         |> Ash.read!()
 
-      assert length(users) >= 1
+      assert users != []
     end
   end
 
@@ -193,7 +193,7 @@ defmodule AshXTDB.TemporalTest do
 
   describe "temporal mutations" do
     test "with_valid_from sets valid time start" do
-      past_time = DateTime.add(DateTime.utc_now(), -86400, :second)
+      past_time = DateTime.add(DateTime.utc_now(), -86_400, :second)
 
       user =
         User
@@ -217,7 +217,7 @@ defmodule AshXTDB.TemporalTest do
     end
 
     test "with_valid_to sets valid time end" do
-      future_time = DateTime.add(DateTime.utc_now(), 86400, :second)
+      future_time = DateTime.add(DateTime.utc_now(), 86_400, :second)
 
       user =
         User
@@ -232,8 +232,8 @@ defmodule AshXTDB.TemporalTest do
     end
 
     test "with_valid_time sets both from and to" do
-      past_time = DateTime.add(DateTime.utc_now(), -86400, :second)
-      future_time = DateTime.add(DateTime.utc_now(), 86400, :second)
+      past_time = DateTime.add(DateTime.utc_now(), -86_400, :second)
+      future_time = DateTime.add(DateTime.utc_now(), 86_400, :second)
 
       user =
         User

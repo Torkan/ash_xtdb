@@ -89,7 +89,7 @@ defmodule AshXTDB.FilterOperatorsTest do
         |> Ash.read!()
 
       # Should find none - case sensitive
-      assert length(users) == 0
+      assert users == []
     end
 
     test "filters records containing partial match" do

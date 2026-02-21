@@ -13,7 +13,7 @@ defmodule AshXTDB.NestedExistsCalculationTest do
   """
   use ExUnit.Case, async: false
 
-  alias AshXTDB.Test.{Organization, User, Post}
+  alias AshXTDB.Test.{Organization, Post, User}
 
   require Ash.Query
 
@@ -390,7 +390,8 @@ defmodule AshXTDB.NestedExistsCalculationTest do
         params: [],
         joins: %{},
         join_counter: 0,
-        table_alias: "t"
+        table_alias: "t",
+        in_exists?: false
       }
 
       exists_expr = %Ash.Query.Exists{
@@ -419,7 +420,8 @@ defmodule AshXTDB.NestedExistsCalculationTest do
         params: [],
         joins: %{},
         join_counter: 0,
-        table_alias: "t"
+        table_alias: "t",
+        in_exists?: false
       }
 
       exists_expr = %Ash.Query.Exists{

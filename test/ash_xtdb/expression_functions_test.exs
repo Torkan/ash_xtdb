@@ -742,8 +742,8 @@ defmodule AshXTDB.ExpressionFunctionsTest do
   # ============================================================================
 
   describe "exists() filter function - SQL generation" do
-    alias AshXTDB.Test.User
     alias AshXTDB.Test.Post
+    alias AshXTDB.Test.User
 
     test "generates correct SQL for simple exists (no filter)" do
       # exists(posts) -> EXISTS (SELECT 1 FROM posts sub WHERE sub.user_id = t._id)
@@ -791,7 +791,8 @@ defmodule AshXTDB.ExpressionFunctionsTest do
         params: [],
         joins: %{},
         join_counter: 0,
-        table_alias: "t"
+        table_alias: "t",
+        in_exists?: false
       }
 
       {sql, state} = AshXTDB.SQL.Filter.expression_to_sql_for_test(exists_expr, state)
@@ -807,8 +808,8 @@ defmodule AshXTDB.ExpressionFunctionsTest do
   end
 
   describe "exists() filter function - integration" do
-    alias AshXTDB.Test.User
     alias AshXTDB.Test.Post
+    alias AshXTDB.Test.User
 
     setup do
       # Clean up both tables

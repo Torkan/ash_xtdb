@@ -79,7 +79,8 @@ defmodule AshXTDB.SQL.Filter do
       joins: %{},
       join_counter: 0,
       table_alias: table_alias,
-      aggregate_alias_map: aggregate_alias_map
+      aggregate_alias_map: aggregate_alias_map,
+      in_exists?: false
     }
 
     {sql, state} = expression_to_sql(expression, state)
@@ -414,6 +415,10 @@ defmodule AshXTDB.SQL.Filter do
     end
   end
 
+  # Boolean literals - `true` means "no filter" (passthrough), `false` means "always false"
+  defp expression_to_sql(true, state), do: {nil, state}
+  defp expression_to_sql(false, state), do: {"FALSE", state}
+
   # Catch-all for unhandled non-struct expressions
   defp expression_to_sql(expr, state)
        when not is_map(expr) or not is_map_key(expr, :__struct__) do
@@ -431,11 +436,7 @@ defmodule AshXTDB.SQL.Filter do
   defp exists_to_sql([rel_name | rest], expr, state) do
     relationship = Ash.Resource.Info.relationship(state.resource, rel_name)
 
-    unless relationship do
-      require Logger
-      Logger.warning("Unknown relationship in exists: #{inspect(rel_name)}")
-      {nil, state}
-    else
+    if relationship do
       dest_resource = relationship.destination
       dest_table = Info.table!(dest_resource)
 
@@ -453,7 +454,8 @@ defmodule AshXTDB.SQL.Filter do
           inner_state = %{
             state
             | resource: dest_resource,
-              table_alias: sub_alias
+              table_alias: sub_alias,
+              in_exists?: true
           }
 
           {inner_sql, inner_state} = exists_to_sql(rest, expr, inner_state)
@@ -474,7 +476,8 @@ defmodule AshXTDB.SQL.Filter do
               inner_state = %{
                 state
                 | resource: dest_resource,
-                  table_alias: sub_alias
+                  table_alias: sub_alias,
+                  in_exists?: true
               }
 
               {inner_sql, inner_state} = expression_to_sql(expr, inner_state)
@@ -499,6 +502,10 @@ defmodule AshXTDB.SQL.Filter do
 
       sql = "EXISTS (SELECT 1 FROM #{quote_table(dest_table)} #{sub_alias} WHERE #{where_clause})"
       {sql, state}
+    else
+      require Logger
+      Logger.warning("Unknown relationship in exists: #{inspect(rel_name)}")
+      {nil, state}
     end
   end
 
@@ -571,7 +578,6 @@ defmodule AshXTDB.SQL.Filter do
     "#{dest_col} IN (SELECT th.#{dest_attr_on_join_col} FROM #{through_table_quoted} th WHERE th.#{source_attr_on_join_col} = #{source_col})"
   end
 
-  defp quote_table(table) when is_atom(table), do: quote_identifier(Atom.to_string(table))
   defp quote_table(table) when is_binary(table), do: quote_identifier(table)
 
   defp quote_identifier(name) do
@@ -753,12 +759,10 @@ defmodule AshXTDB.SQL.Filter do
     {additional_cases, else_sql, state} = extract_cases(false_val, state)
 
     when_clauses =
-      [{"WHEN #{cond_sql} THEN #{true_sql}"} | additional_cases]
-      |> Enum.map(fn
+      Enum.map_join([{"WHEN #{cond_sql} THEN #{true_sql}"} | additional_cases], " ", fn
         {clause} -> clause
         {cond_str, result} -> "WHEN #{cond_str} THEN #{result}"
       end)
-      |> Enum.join(" ")
 
     {"CASE #{when_clauses} ELSE #{else_sql} END", state}
   end
@@ -772,12 +776,10 @@ defmodule AshXTDB.SQL.Filter do
     {additional_cases, else_sql, state} = extract_cases(false_val, state)
 
     when_clauses =
-      [{"WHEN #{cond_sql} THEN #{true_sql}"} | additional_cases]
-      |> Enum.map(fn
+      Enum.map_join([{"WHEN #{cond_sql} THEN #{true_sql}"} | additional_cases], " ", fn
         {clause} -> clause
         {cond_str, result} -> "WHEN #{cond_str} THEN #{result}"
       end)
-      |> Enum.join(" ")
 
     {"CASE #{when_clauses} ELSE #{else_sql} END", state}
   end
@@ -1230,21 +1232,25 @@ defmodule AshXTDB.SQL.Filter do
 
   # Handle Ash.Query.Aggregate references - use the precomputed aggregate alias
   defp ref_or_value_to_sql(
-         %Ash.Query.Ref{attribute: %Ash.Query.Aggregate{name: name}},
+         %Ash.Query.Ref{attribute: %Ash.Query.Aggregate{} = aggregate},
          state
        ) do
     agg_alias_map = Map.get(state, :aggregate_alias_map, %{})
 
-    case Map.get(agg_alias_map, name) do
+    case Map.get(agg_alias_map, aggregate.name) do
       nil ->
-        # Aggregate not in alias map - this shouldn't happen if build_aggregate_joins worked
-        require Logger
+        # Not in root alias map — if inside EXISTS, generate an inline scalar subquery
+        if Map.get(state, :in_exists?, false) do
+          build_inline_aggregate_subquery(aggregate, state)
+        else
+          require Logger
 
-        Logger.warning(
-          "Aggregate #{inspect(name)} not found in alias map: #{inspect(agg_alias_map)}"
-        )
+          Logger.warning(
+            "Aggregate #{inspect(aggregate.name)} not found in alias map: #{inspect(agg_alias_map)}"
+          )
 
-        {"0", state}
+          {"0", state}
+        end
 
       agg_expr ->
         {agg_expr, state}
@@ -1252,14 +1258,18 @@ defmodule AshXTDB.SQL.Filter do
   end
 
   # Handle aggregate references by name (when Ash passes just the aggregate struct)
-  defp ref_or_value_to_sql(%Ash.Query.Aggregate{name: name}, state) do
+  defp ref_or_value_to_sql(%Ash.Query.Aggregate{} = aggregate, state) do
     agg_alias_map = Map.get(state, :aggregate_alias_map, %{})
 
-    case Map.get(agg_alias_map, name) do
+    case Map.get(agg_alias_map, aggregate.name) do
       nil ->
-        require Logger
-        Logger.warning("Aggregate #{inspect(name)} not found in alias map")
-        {"0", state}
+        if Map.get(state, :in_exists?, false) do
+          build_inline_aggregate_subquery(aggregate, state)
+        else
+          require Logger
+          Logger.warning("Aggregate #{inspect(aggregate.name)} not found in alias map")
+          {"0", state}
+        end
 
       agg_expr ->
         {agg_expr, state}
@@ -1368,6 +1378,118 @@ defmodule AshXTDB.SQL.Filter do
     placeholder = "$#{state.param_idx}"
     state = %{state | param_idx: state.param_idx + 1, params: [value | state.params]}
     {placeholder, state}
+  end
+
+  # ============================================================================
+  # Inline Aggregate Subqueries (for aggregates inside EXISTS)
+  # ============================================================================
+
+  # Generates a correlated scalar subquery for an aggregate referenced inside
+  # an EXISTS clause. Only supports single-level relationship paths.
+  #
+  # Example output for `user_count > 0` inside `exists(organization, ...)`:
+  #   (SELECT COUNT(*) FROM "users" agg_sub0 WHERE agg_sub0."organization_id" = sub0."_id")
+  defp build_inline_aggregate_subquery(aggregate, state) do
+    relationship_path = aggregate.relationship_path
+
+    case relationship_path do
+      [rel_name] ->
+        relationship = Ash.Resource.Info.relationship(state.resource, rel_name)
+
+        if relationship do
+          dest_resource = relationship.destination
+          dest_table = Info.table!(dest_resource)
+
+          # Generate unique alias for the aggregate subquery
+          agg_alias = "agg_sub#{state.join_counter}"
+          state = %{state | join_counter: state.join_counter + 1}
+
+          # Build aggregate function
+          agg_func = aggregate_kind_to_sql(aggregate.kind, aggregate.field, agg_alias)
+
+          # Build correlation condition
+          source_attr = relationship.source_attribute
+          dest_attr = relationship.destination_attribute
+
+          source_col =
+            if source_attr == :id,
+              do: "#{state.table_alias}.\"_id\"",
+              else: "#{state.table_alias}.#{quote_identifier(Atom.to_string(source_attr))}"
+
+          dest_col =
+            if dest_attr == :id,
+              do: "#{agg_alias}.\"_id\"",
+              else: "#{agg_alias}.#{quote_identifier(Atom.to_string(dest_attr))}"
+
+          correlation = "#{dest_col} = #{source_col}"
+
+          # Build aggregate filter if present
+          {filter_sql, state} = build_aggregate_filter(aggregate, agg_alias, dest_resource, state)
+
+          where_parts = [correlation | if(filter_sql, do: [filter_sql], else: [])]
+          where_clause = Enum.join(where_parts, " AND ")
+
+          sql =
+            "(SELECT #{agg_func} FROM #{quote_table(dest_table)} #{agg_alias} WHERE #{where_clause})"
+
+          {sql, state}
+        else
+          require Logger
+          Logger.warning("Unknown relationship #{inspect(rel_name)} for inline aggregate")
+          {"0", state}
+        end
+
+      _ ->
+        # Multi-level relationship paths not yet supported for inline aggregates
+        require Logger
+
+        Logger.warning(
+          "Multi-level aggregate relationship path #{inspect(relationship_path)} not supported in EXISTS context, falling back to 0"
+        )
+
+        {"0", state}
+    end
+  end
+
+  # Convert aggregate kind to SQL function expression
+  defp aggregate_kind_to_sql(:count, _field, _alias), do: "COUNT(*)"
+
+  defp aggregate_kind_to_sql(kind, field, agg_alias) when kind in [:sum, :avg, :min, :max] do
+    func = kind |> Atom.to_string() |> String.upcase()
+    col = if field == :id, do: "\"_id\"", else: quote_identifier(Atom.to_string(field))
+    "#{func}(#{agg_alias}.#{col})"
+  end
+
+  defp aggregate_kind_to_sql(:exists, _field, _alias), do: "COUNT(*)"
+  defp aggregate_kind_to_sql(_kind, _field, _alias), do: "COUNT(*)"
+
+  # Build the WHERE filter clause for an aggregate's query filter
+  defp build_aggregate_filter(aggregate, agg_alias, dest_resource, state) do
+    # The aggregate's filter is stored in aggregate.query.filter
+    agg_filter =
+      case aggregate do
+        %{query: %Ash.Query{filter: %Ash.Filter{expression: expr}}} when not is_nil(expr) ->
+          expr
+
+        _ ->
+          nil
+      end
+
+    if agg_filter do
+      # Evaluate the filter expression in the context of the aggregate's destination resource
+      inner_state = %{
+        state
+        | resource: dest_resource,
+          table_alias: agg_alias,
+          in_exists?: false
+      }
+
+      {filter_sql, inner_state} = expression_to_sql(agg_filter, inner_state)
+      state = %{state | params: inner_state.params, join_counter: inner_state.join_counter}
+      {filter_sql, state}
+    else
+      {nil, state}
+    end
   end
 
   # Ensure a join exists for the given relationship path

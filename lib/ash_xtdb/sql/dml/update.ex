@@ -37,45 +37,15 @@ defmodule AshXTDB.SQL.DML.Update do
   """
   @spec build_update(String.t(), map(), map(), list(), Ash.Resource.t()) :: {String.t(), list()}
   def build_update(table, pkey, changes, atomics, resource) do
-    # Build SET clause for regular changes
-    {set_clauses, set_params, next_idx} =
-      changes
-      |> Map.to_list()
-      |> Enum.reduce({[], [], 1}, fn {col, val}, {clauses, params, idx} ->
-        clause = "#{Core.to_insert_column_name(col)} = $#{idx}"
-        {[clause | clauses], [val | params], idx + 1}
-      end)
-
-    # Build SET clause for atomic updates (expressions)
     quoted_table = Core.quote_identifier(table)
 
-    {atomic_clauses, atomic_params, next_idx} =
-      atomics
-      |> Enum.reduce({[], [], next_idx}, fn {col, expr}, {clauses, params, idx} ->
-        {expr_sql, expr_params, new_idx} =
-          atomic_expression_to_sql(expr, resource, quoted_table, idx)
+    {set_clause, set_params, next_idx} =
+      build_full_set_clause(changes, atomics, resource, quoted_table)
 
-        clause = "#{Core.to_insert_column_name(col)} = #{expr_sql}"
-        {[clause | clauses], params ++ expr_params, new_idx}
-      end)
-
-    # Combine all SET clauses
-    all_clauses = Enum.reverse(set_clauses) ++ Enum.reverse(atomic_clauses)
-    set_clause = Enum.join(all_clauses, ", ")
-    all_set_params = Enum.reverse(set_params) ++ atomic_params
-
-    # Build WHERE clause for primary key
-    pkey_attr = Ash.Resource.Info.primary_key(resource) |> List.first()
-    pkey_value = Map.get(pkey, pkey_attr)
-
-    # XTDB requires fully-qualified column in WHERE
-    where_clause = "#{quoted_table}.\"_id\" = $#{next_idx}"
-    where_params = [pkey_value]
+    {where_clause, where_params} = Core.build_pkey_where(quoted_table, pkey, resource, next_idx)
 
     sql = "UPDATE #{quoted_table} SET #{set_clause} WHERE #{where_clause}"
-    params = all_set_params ++ where_params
-
-    {sql, params}
+    {sql, set_params ++ where_params}
   end
 
   @doc """
@@ -108,32 +78,17 @@ defmodule AshXTDB.SQL.DML.Update do
         %DateTime{} = from,
         %DateTime{} = to
       ) do
-    # Build SET clause
-    {set_clauses, set_params, next_idx} =
-      changes
-      |> Map.to_list()
-      |> Enum.reduce({[], [], 1}, fn {col, val}, {clauses, params, idx} ->
-        clause = "#{Core.to_insert_column_name(col)} = $#{idx}"
-        {[clause | clauses], [val | params], idx + 1}
-      end)
+    {set_clauses, set_params, next_idx} = build_set_clauses(changes)
 
     set_clause = set_clauses |> Enum.reverse() |> Enum.join(", ")
     set_params = Enum.reverse(set_params)
 
-    # Build WHERE clause for primary key
-    pkey_attr = Ash.Resource.Info.primary_key(resource) |> List.first()
-    pkey_value = Map.get(pkey, pkey_attr)
     quoted_table = Core.quote_identifier(table)
-    where_clause = "#{quoted_table}.\"_id\" = $#{next_idx}"
-    where_params = [pkey_value]
-
-    # Build FOR PORTION OF clause
+    {where_clause, where_params} = Core.build_pkey_where(quoted_table, pkey, resource, next_idx)
     portion_clause = Temporal.build_portion_of_clause(from, to)
 
     sql = "UPDATE #{quoted_table} #{portion_clause} SET #{set_clause} WHERE #{where_clause}"
-    params = set_params ++ where_params
-
-    {sql, params}
+    {sql, set_params ++ where_params}
   end
 
   @doc """
@@ -145,28 +100,10 @@ defmodule AshXTDB.SQL.DML.Update do
   @spec build_update_query(String.t(), map(), list(), map(), Ash.Resource.t()) ::
           {String.t(), list()}
   def build_update_query(table, changes, atomics, query, resource) do
-    # Build SET clause for regular changes
-    {set_clauses, set_params, next_idx} =
-      changes
-      |> Map.to_list()
-      |> Enum.reduce({[], [], 1}, fn {col, val}, {clauses, params, idx} ->
-        clause = "#{Core.to_insert_column_name(col)} = $#{idx}"
-        {[clause | clauses], [val | params], idx + 1}
-      end)
+    quoted_table = Core.quote_identifier(table)
 
-    # Build SET clause for atomic updates (expressions)
-    {atomic_clauses, atomic_params, next_idx} =
-      atomics
-      |> Enum.reduce({[], [], next_idx}, fn {col, expr}, {clauses, params, idx} ->
-        {expr_sql, expr_params, new_idx} = atomic_expression_to_sql(expr, resource, table, idx)
-        clause = "#{Core.to_insert_column_name(col)} = #{expr_sql}"
-        {[clause | clauses], params ++ expr_params, new_idx}
-      end)
-
-    # Combine all SET clauses
-    all_clauses = Enum.reverse(set_clauses) ++ Enum.reverse(atomic_clauses)
-    set_clause = Enum.join(all_clauses, ", ")
-    all_set_params = Enum.reverse(set_params) ++ atomic_params
+    {set_clause, set_params, next_idx} =
+      build_full_set_clause(changes, atomics, resource, table)
 
     # Build WHERE clause from filter
     # Use table name (not alias) for UPDATE statements since XTDB doesn't support aliases in UPDATE
@@ -182,8 +119,6 @@ defmodule AshXTDB.SQL.DML.Update do
           {where_sql, filter_params}
       end
 
-    quoted_table = Core.quote_identifier(table)
-
     sql =
       if where_clause do
         "UPDATE #{quoted_table} SET #{set_clause} #{where_clause}"
@@ -191,7 +126,42 @@ defmodule AshXTDB.SQL.DML.Update do
         "UPDATE #{quoted_table} SET #{set_clause}"
       end
 
-    {sql, all_set_params ++ where_params}
+    {sql, set_params ++ where_params}
+  end
+
+  # ============================================================================
+  # Private Helpers
+  # ============================================================================
+
+  # Builds SET clauses from a changes map. Returns {clauses, params, next_idx}.
+  defp build_set_clauses(changes, start_idx \\ 1) do
+    changes
+    |> Map.to_list()
+    |> Enum.reduce({[], [], start_idx}, fn {col, val}, {clauses, params, idx} ->
+      clause = "#{Core.to_insert_column_name(col)} = $#{idx}"
+      {[clause | clauses], [val | params], idx + 1}
+    end)
+  end
+
+  # Builds a combined SET clause from both regular changes and atomic expressions.
+  # Returns {set_clause_string, all_params, next_idx}.
+  defp build_full_set_clause(changes, atomics, resource, table_ref) do
+    {set_clauses, set_params, next_idx} = build_set_clauses(changes)
+
+    {atomic_clauses, atomic_params, next_idx} =
+      Enum.reduce(atomics, {[], [], next_idx}, fn {col, expr}, {clauses, params, idx} ->
+        {expr_sql, expr_params, new_idx} =
+          atomic_expression_to_sql(expr, resource, table_ref, idx)
+
+        clause = "#{Core.to_insert_column_name(col)} = #{expr_sql}"
+        {[clause | clauses], params ++ expr_params, new_idx}
+      end)
+
+    all_clauses = Enum.reverse(set_clauses) ++ Enum.reverse(atomic_clauses)
+    set_clause = Enum.join(all_clauses, ", ")
+    all_params = Enum.reverse(set_params) ++ atomic_params
+
+    {set_clause, all_params, next_idx}
   end
 
   # Convert an atomic expression to SQL for use in UPDATE SET clause
@@ -207,7 +177,6 @@ defmodule AshXTDB.SQL.DML.Update do
 
     {sql, final_state} = Filter.expression_to_sql(expr, state)
 
-    # Return the SQL, parameters, and next parameter index
     {sql, Enum.reverse(final_state.params), final_state.param_idx}
   end
 end

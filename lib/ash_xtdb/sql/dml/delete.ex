@@ -25,14 +25,10 @@ defmodule AshXTDB.SQL.DML.Delete do
   """
   @spec build_delete(String.t(), map(), Ash.Resource.t()) :: {String.t(), list()}
   def build_delete(table, pkey, resource) do
-    pkey_attr = Ash.Resource.Info.primary_key(resource) |> List.first()
-    pkey_value = Map.get(pkey, pkey_attr)
-
-    # XTDB requires fully-qualified column in WHERE
     quoted_table = Core.quote_identifier(table)
-    sql = "DELETE FROM #{quoted_table} WHERE #{quoted_table}.\"_id\" = $1"
+    {where_clause, where_params} = Core.build_pkey_where(quoted_table, pkey, resource, 1)
 
-    {sql, [pkey_value]}
+    {"DELETE FROM #{quoted_table} WHERE #{where_clause}", where_params}
   end
 
   @doc """
@@ -50,15 +46,11 @@ defmodule AshXTDB.SQL.DML.Delete do
   @spec build_delete_for_portion(String.t(), map(), Ash.Resource.t(), DateTime.t(), DateTime.t()) ::
           {String.t(), list()}
   def build_delete_for_portion(table, pkey, resource, %DateTime{} = from, %DateTime{} = to) do
-    pkey_attr = Ash.Resource.Info.primary_key(resource) |> List.first()
-    pkey_value = Map.get(pkey, pkey_attr)
-
+    quoted_table = Core.quote_identifier(table)
+    {where_clause, where_params} = Core.build_pkey_where(quoted_table, pkey, resource, 1)
     portion_clause = Temporal.build_portion_of_clause(from, to)
 
-    quoted_table = Core.quote_identifier(table)
-    sql = "DELETE FROM #{quoted_table} #{portion_clause} WHERE #{quoted_table}.\"_id\" = $1"
-
-    {sql, [pkey_value]}
+    {"DELETE FROM #{quoted_table} #{portion_clause} WHERE #{where_clause}", where_params}
   end
 
   @doc """
@@ -68,7 +60,6 @@ defmodule AshXTDB.SQL.DML.Delete do
   """
   @spec build_destroy_query(String.t(), map(), Ash.Resource.t()) :: {String.t(), list()}
   def build_destroy_query(table, query, resource) do
-    # Build WHERE clause from filter
     # Use table name (not alias) for DELETE statements since XTDB doesn't support aliases in DELETE
     {where_clause, where_params} =
       case query.filter do

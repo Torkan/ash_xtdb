@@ -133,33 +133,6 @@ defmodule AshXTDB.SQL.DML.Patch do
     end
   end
 
-  @doc """
-  Legacy build_patch_sql for backwards compatibility.
-  Converts the old API to the new XTDB v2 syntax.
-  """
-  @spec build_patch_sql(
-          String.t(),
-          list(map()),
-          list(atom()),
-          :update | :delete | :skip,
-          :insert | :skip,
-          :all | list(atom()),
-          Ash.Resource.t()
-        ) :: String.t()
-  def build_patch_sql(
-        table,
-        records,
-        _match_keys,
-        _on_match,
-        _on_no_match,
-        _update_fields,
-        _resource
-      ) do
-    # XTDB v2's PATCH always upserts by _id, ignoring match_keys and on_match/on_no_match
-    # The merge behavior is at key level: present keys override, absent keys preserve
-    build_patch_sql(table, records, nil, nil)
-  end
-
   # Build the RECORDS clause with XTDB map syntax
   defp build_records_clause(records) do
     Enum.map_join(records, ", ", &record_to_xtdb_map/1)
@@ -182,15 +155,6 @@ defmodule AshXTDB.SQL.DML.Patch do
   """
   @spec upsert(Ash.Resource.t(), map()) :: :ok | {:error, term()}
   def upsert(resource, record) do
-    execute(resource: resource, records: [record])
-  end
-
-  @doc """
-  Builds a simple upsert PATCH for a single record (legacy API with match_keys).
-  """
-  @spec upsert(Ash.Resource.t(), map(), list(atom())) :: :ok | {:error, term()}
-  def upsert(resource, record, _match_keys) do
-    # XTDB v2 always matches by _id, match_keys is ignored
     execute(resource: resource, records: [record])
   end
 

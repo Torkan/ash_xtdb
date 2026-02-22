@@ -62,24 +62,11 @@ defmodule AshXTDB.SQL.DML.Insert do
           DateTime.t()
         ) ::
           {String.t(), list()}
-  def build_insert_with_valid_time(table, record, _resource, %DateTime{} = from, %DateTime{} = to) do
-    # Add _valid_from and _valid_to to the record
-    record_with_valid_time =
-      record
-      |> Map.put(:_valid_from, from)
-      |> Map.put(:_valid_to, to)
-
-    # Convert to list of tuples to ensure column-value alignment
-    items = Enum.to_list(record_with_valid_time)
-    columns = Enum.map(items, fn {k, _v} -> k end)
-    values = Enum.map(items, fn {_k, v} -> v end)
-
-    column_list = Enum.map_join(columns, ", ", &Core.to_insert_column_name/1)
-    placeholders = Enum.map_join(1..length(values), ", ", fn i -> "$#{i}" end)
-
-    sql = "INSERT INTO #{Core.quote_identifier(table)} (#{column_list}) VALUES (#{placeholders})"
-
-    {sql, values}
+  def build_insert_with_valid_time(table, record, resource, %DateTime{} = from, %DateTime{} = to) do
+    record
+    |> Map.put(:_valid_from, from)
+    |> Map.put(:_valid_to, to)
+    |> then(&build_insert(table, &1, resource))
   end
 
   @doc """
@@ -95,21 +82,10 @@ defmodule AshXTDB.SQL.DML.Insert do
   """
   @spec build_insert_with_valid_from(String.t(), map(), Ash.Resource.t(), DateTime.t()) ::
           {String.t(), list()}
-  def build_insert_with_valid_from(table, record, _resource, %DateTime{} = from) do
-    # Add _valid_from to the record
-    record_with_valid_from = Map.put(record, :_valid_from, from)
-
-    # Convert to list of tuples to ensure column-value alignment
-    items = Enum.to_list(record_with_valid_from)
-    columns = Enum.map(items, fn {k, _v} -> k end)
-    values = Enum.map(items, fn {_k, v} -> v end)
-
-    column_list = Enum.map_join(columns, ", ", &Core.to_insert_column_name/1)
-    placeholders = Enum.map_join(1..length(values), ", ", fn i -> "$#{i}" end)
-
-    sql = "INSERT INTO #{Core.quote_identifier(table)} (#{column_list}) VALUES (#{placeholders})"
-
-    {sql, values}
+  def build_insert_with_valid_from(table, record, resource, %DateTime{} = from) do
+    record
+    |> Map.put(:_valid_from, from)
+    |> then(&build_insert(table, &1, resource))
   end
 
   @doc """

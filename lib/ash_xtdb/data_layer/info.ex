@@ -59,4 +59,14 @@ defmodule AshXTDB.DataLayer.Info do
   def valid_to_public?(resource) do
     Spark.Dsl.Extension.get_opt(resource, [:xtdb], :valid_to_public?, false)
   end
+
+  @doc """
+  Returns the list of attribute names for a resource.
+  """
+  @spec attribute_names(Ash.Resource.t()) :: [atom()]
+  def attribute_names(resource) do
+    resource
+    |> Ash.Resource.Info.attributes()
+    |> Enum.map(& &1.name)
+  end
 end

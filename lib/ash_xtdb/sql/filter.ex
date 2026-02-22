@@ -512,7 +512,9 @@ defmodule AshXTDB.SQL.Filter do
           inner -> "#{join_condition} AND #{inner}"
         end
 
-      sql = "EXISTS (SELECT 1 FROM #{quote_table(dest_table)} #{sub_alias} WHERE #{where_clause})"
+      sql =
+        "EXISTS (SELECT 1 FROM #{Core.quote_identifier(dest_table)} #{sub_alias} WHERE #{where_clause})"
+
       {sql, state}
     else
       require Logger
@@ -541,59 +543,29 @@ defmodule AshXTDB.SQL.Filter do
 
   # Build join condition for direct relationships (belongs_to, has_one, has_many)
   defp build_direct_join_condition(relationship, parent_alias, sub_alias) do
-    source_attr = relationship.source_attribute
-    dest_attr = relationship.destination_attribute
-
-    # Handle :id -> _id mapping
-    source_col =
-      if source_attr == :id,
-        do: "#{parent_alias}.\"_id\"",
-        else: "#{parent_alias}.#{quote_identifier(Atom.to_string(source_attr))}"
-
-    dest_col =
-      if dest_attr == :id,
-        do: "#{sub_alias}.\"_id\"",
-        else: "#{sub_alias}.#{quote_identifier(Atom.to_string(dest_attr))}"
+    source_col = Core.to_select_column_name(relationship.source_attribute, parent_alias)
+    dest_col = Core.to_select_column_name(relationship.destination_attribute, sub_alias)
 
     "#{dest_col} = #{source_col}"
   end
 
   # Build join condition for many-to-many relationships using a through-table subquery
   defp build_many_to_many_join_condition(relationship, parent_alias, sub_alias) do
-    # Get through table info
     through_resource = relationship.through
     through_table = Info.table!(through_resource)
 
-    # Get the join attributes
-    source_attr = relationship.source_attribute
-    dest_attr = relationship.destination_attribute
-    source_attr_on_join = relationship.source_attribute_on_join_resource
-    dest_attr_on_join = relationship.destination_attribute_on_join_resource
+    source_col = Core.to_select_column_name(relationship.source_attribute, parent_alias)
+    dest_col = Core.to_select_column_name(relationship.destination_attribute, sub_alias)
 
-    # Handle :id -> _id mapping for the main tables
-    source_col =
-      if source_attr == :id,
-        do: "#{parent_alias}.\"_id\"",
-        else: "#{parent_alias}.#{quote_identifier(Atom.to_string(source_attr))}"
+    source_attr_on_join_col =
+      Core.quote_identifier(Atom.to_string(relationship.source_attribute_on_join_resource))
 
-    dest_col =
-      if dest_attr == :id,
-        do: "#{sub_alias}.\"_id\"",
-        else: "#{sub_alias}.#{quote_identifier(Atom.to_string(dest_attr))}"
+    dest_attr_on_join_col =
+      Core.quote_identifier(Atom.to_string(relationship.destination_attribute_on_join_resource))
 
-    # Build column references for the through table
-    source_attr_on_join_col = quote_identifier(Atom.to_string(source_attr_on_join))
-    dest_attr_on_join_col = quote_identifier(Atom.to_string(dest_attr_on_join))
-    through_table_quoted = quote_identifier(through_table)
+    through_table_quoted = Core.quote_identifier(through_table)
 
-    # Generate: dest."_id" IN (SELECT th.dest_attr FROM through th WHERE th.source_attr = parent."_id")
     "#{dest_col} IN (SELECT th.#{dest_attr_on_join_col} FROM #{through_table_quoted} th WHERE th.#{source_attr_on_join_col} = #{source_col})"
-  end
-
-  defp quote_table(table) when is_binary(table), do: quote_identifier(table)
-
-  defp quote_identifier(name) do
-    AshXTDB.SQL.quote_identifier(name)
   end
 
   # ============================================================================
@@ -1420,18 +1392,10 @@ defmodule AshXTDB.SQL.Filter do
           agg_func = aggregate_kind_to_sql(aggregate.kind, aggregate.field, agg_alias)
 
           # Build correlation condition
-          source_attr = relationship.source_attribute
-          dest_attr = relationship.destination_attribute
-
           source_col =
-            if source_attr == :id,
-              do: "#{state.table_alias}.\"_id\"",
-              else: "#{state.table_alias}.#{quote_identifier(Atom.to_string(source_attr))}"
+            Core.to_select_column_name(relationship.source_attribute, state.table_alias)
 
-          dest_col =
-            if dest_attr == :id,
-              do: "#{agg_alias}.\"_id\"",
-              else: "#{agg_alias}.#{quote_identifier(Atom.to_string(dest_attr))}"
+          dest_col = Core.to_select_column_name(relationship.destination_attribute, agg_alias)
 
           correlation = "#{dest_col} = #{source_col}"
 
@@ -1442,7 +1406,7 @@ defmodule AshXTDB.SQL.Filter do
           where_clause = Enum.join(where_parts, " AND ")
 
           sql =
-            "(SELECT #{agg_func} FROM #{quote_table(dest_table)} #{agg_alias} WHERE #{where_clause})"
+            "(SELECT #{agg_func} FROM #{Core.quote_identifier(dest_table)} #{agg_alias} WHERE #{where_clause})"
 
           {sql, state}
         else
@@ -1468,7 +1432,7 @@ defmodule AshXTDB.SQL.Filter do
 
   defp aggregate_kind_to_sql(kind, field, agg_alias) when kind in [:sum, :avg, :min, :max] do
     func = kind |> Atom.to_string() |> String.upcase()
-    col = if field == :id, do: "\"_id\"", else: quote_identifier(Atom.to_string(field))
+    col = Core.field_to_column(field)
     "#{func}(#{agg_alias}.#{col})"
   end
 

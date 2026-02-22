@@ -30,6 +30,8 @@ defmodule AshXTDB.SyncWorker do
 
   require Logger
 
+  alias AshXTDB.SQL.Core
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     %{
@@ -67,13 +69,13 @@ defmodule AshXTDB.SyncWorker do
         # Bounded INSERT — splices into [valid_from, valid_to)
         param_idx = length(params) + 1
 
-        "INSERT INTO #{quote_table(table)} (#{columns}, _valid_from, _valid_to) " <>
+        "INSERT INTO #{Core.quote_identifier(table)} (#{columns}, _valid_from, _valid_to) " <>
           "VALUES (#{values}, $#{param_idx}, $#{param_idx + 1})"
       else
         # Unbounded INSERT — safe with single-concurrency queue
         param_idx = length(params) + 1
 
-        "INSERT INTO #{quote_table(table)} (#{columns}, _valid_from) " <>
+        "INSERT INTO #{Core.quote_identifier(table)} (#{columns}, _valid_from) " <>
           "VALUES (#{values}, $#{param_idx})"
       end
 
@@ -102,9 +104,9 @@ defmodule AshXTDB.SyncWorker do
     {id_column, id_value} = get_primary_key(history_resource, data)
 
     sql =
-      "DELETE FROM #{quote_table(table)} " <>
+      "DELETE FROM #{Core.quote_identifier(table)} " <>
         "FOR PORTION OF VALID_TIME FROM $1 TO NULL " <>
-        "WHERE #{quote_column(id_column)} = $2"
+        "WHERE #{Core.quote_identifier(id_column)} = $2"
 
     opts = if tenant, do: [tenant: tenant], else: []
 
@@ -137,7 +139,7 @@ defmodule AshXTDB.SyncWorker do
             {cols, vals, params, idx}
 
           value ->
-            col = quote_column(attr_name)
+            col = Core.quote_identifier(attr_name)
             val = "$#{idx}"
             param = deserialize_value(value, attr.type)
             {cols ++ [col], vals ++ [val], params ++ [param], idx + 1}
@@ -160,9 +162,6 @@ defmodule AshXTDB.SyncWorker do
   defp get_table(history_resource) do
     AshXTDB.DataLayer.Info.table!(history_resource)
   end
-
-  defp quote_table(table), do: "\"#{table}\""
-  defp quote_column(col), do: "\"#{col}\""
 
   # ============================================================================
   # Deserialization

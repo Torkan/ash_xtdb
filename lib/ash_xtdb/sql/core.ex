@@ -376,4 +376,54 @@ defmodule AshXTDB.SQL.Core do
       [:_id | columns]
     end
   end
+
+  # ============================================================================
+  # SQL Clause Builders
+  # ============================================================================
+
+  @doc """
+  Converts a sort direction atom to its SQL representation.
+
+  NOTE: XTDB has a quirk where DESC reverses NULLS FIRST/LAST behavior.
+  To get correct results, we swap NULLS FIRST <-> NULLS LAST for DESC sorts.
+  """
+  @spec direction_to_sql(atom()) :: String.t()
+  def direction_to_sql(:asc), do: " ASC"
+  def direction_to_sql(:desc), do: " DESC"
+  def direction_to_sql(:asc_nils_first), do: " ASC NULLS FIRST"
+  def direction_to_sql(:asc_nils_last), do: " ASC NULLS LAST"
+  # XTDB quirk: swap NULLS FIRST/LAST for DESC to get correct behavior
+  def direction_to_sql(:desc_nils_first), do: " DESC NULLS LAST"
+  def direction_to_sql(:desc_nils_last), do: " DESC NULLS FIRST"
+
+  @doc """
+  Builds a FETCH FIRST N ROWS ONLY clause (SQL:2011 syntax used by XTDB).
+  """
+  @spec build_limit(non_neg_integer() | nil) :: String.t() | nil
+  def build_limit(nil), do: nil
+  def build_limit(limit), do: "FETCH FIRST #{limit} ROWS ONLY"
+
+  @doc """
+  Builds an OFFSET N ROWS clause.
+  """
+  @spec build_offset(non_neg_integer() | nil) :: String.t() | nil
+  def build_offset(nil), do: nil
+  def build_offset(0), do: nil
+  def build_offset(offset), do: "OFFSET #{offset} ROWS"
+
+  @doc """
+  Builds a primary key WHERE clause for DML statements.
+
+  Returns `{where_sql, [pkey_value]}` where `where_sql` uses the given
+  parameter index placeholder.
+
+  XTDB requires fully-qualified column names and uses `_id` as the primary key column.
+  """
+  @spec build_pkey_where(String.t(), map(), Ash.Resource.t(), pos_integer()) ::
+          {String.t(), list()}
+  def build_pkey_where(quoted_table, pkey, resource, param_idx) do
+    pkey_attr = Ash.Resource.Info.primary_key(resource) |> List.first()
+    pkey_value = Map.get(pkey, pkey_attr)
+    {"#{quoted_table}.\"_id\" = $#{param_idx}", [pkey_value]}
+  end
 end

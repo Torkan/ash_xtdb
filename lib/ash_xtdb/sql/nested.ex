@@ -41,6 +41,7 @@ defmodule AshXTDB.SQL.Nested do
       {select_sql, params} = Nested.build_nested_select(query, [nested])
   """
 
+  alias AshXTDB.DataLayer.Info
   alias AshXTDB.SQL.Core
   alias AshXTDB.SQL.Filter
 
@@ -197,13 +198,8 @@ defmodule AshXTDB.SQL.Nested do
 
     columns =
       case query.select do
-        nil ->
-          resource
-          |> Ash.Resource.Info.attributes()
-          |> Enum.map(& &1.name)
-
-        select when is_list(select) ->
-          select
+        nil -> Info.attribute_names(resource)
+        select when is_list(select) -> select
       end
 
     columns
@@ -226,13 +222,8 @@ defmodule AshXTDB.SQL.Nested do
   defp build_subquery_select(opts, subquery_alias) do
     columns =
       case Map.get(opts, :select) do
-        nil ->
-          opts.resource
-          |> Ash.Resource.Info.attributes()
-          |> Enum.map(& &1.name)
-
-        select when is_list(select) ->
-          select
+        nil -> Info.attribute_names(opts.resource)
+        select when is_list(select) -> select
       end
 
     column_list =
@@ -248,24 +239,8 @@ defmodule AshXTDB.SQL.Nested do
 
   defp build_subquery_order(%{sort: sort}, subquery_alias) do
     clauses =
-      Enum.map_join(sort, ", ", fn
-        {field, :asc} ->
-          "#{Core.to_select_column_name(field, subquery_alias)} ASC"
-
-        {field, :desc} ->
-          "#{Core.to_select_column_name(field, subquery_alias)} DESC"
-
-        {field, :asc_nils_first} ->
-          "#{Core.to_select_column_name(field, subquery_alias)} ASC NULLS FIRST"
-
-        {field, :asc_nils_last} ->
-          "#{Core.to_select_column_name(field, subquery_alias)} ASC NULLS LAST"
-
-        {field, :desc_nils_first} ->
-          "#{Core.to_select_column_name(field, subquery_alias)} DESC NULLS FIRST"
-
-        {field, :desc_nils_last} ->
-          "#{Core.to_select_column_name(field, subquery_alias)} DESC NULLS LAST"
+      Enum.map_join(sort, ", ", fn {field, direction} ->
+        "#{Core.to_select_column_name(field, subquery_alias)}#{Core.direction_to_sql(direction)}"
       end)
 
     "ORDER BY #{clauses}"
@@ -273,12 +248,9 @@ defmodule AshXTDB.SQL.Nested do
 
   defp build_subquery_order(_, _), do: nil
 
-  defp build_subquery_limit(%{limit: nil}), do: nil
-  defp build_subquery_limit(%{limit: limit}), do: "FETCH FIRST #{limit} ROWS ONLY"
+  defp build_subquery_limit(%{limit: limit}), do: Core.build_limit(limit)
   defp build_subquery_limit(_), do: nil
 
-  defp build_subquery_offset(%{offset: nil}), do: nil
-  defp build_subquery_offset(%{offset: 0}), do: nil
-  defp build_subquery_offset(%{offset: offset}), do: "OFFSET #{offset} ROWS"
+  defp build_subquery_offset(%{offset: offset}), do: Core.build_offset(offset)
   defp build_subquery_offset(_), do: nil
 end

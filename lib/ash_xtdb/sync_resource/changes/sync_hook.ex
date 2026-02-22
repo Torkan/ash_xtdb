@@ -147,8 +147,7 @@ defmodule AshXTDB.SyncResource.Changes.SyncHook do
 
     attribute_names =
       changeset.resource
-      |> Ash.Resource.Info.attributes()
-      |> Enum.map(& &1.name)
+      |> AshXTDB.DataLayer.Info.attribute_names()
       |> Enum.reject(&(&1 == pkey_field))
 
     result

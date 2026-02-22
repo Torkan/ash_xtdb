@@ -299,7 +299,7 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
   """
   @spec struct_to_record(struct(), Ash.Resource.t()) :: map()
   def struct_to_record(record, resource) do
-    attr_names = resource |> Ash.Resource.Info.attributes() |> Enum.map(& &1.name)
+    attr_names = AshXTDB.DataLayer.Info.attribute_names(resource)
 
     record
     |> Map.from_struct()

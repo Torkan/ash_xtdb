@@ -443,8 +443,8 @@ defmodule AshXTDB.SQL do
     # Build PARTITION BY clause from distinct fields
     partition_cols =
       Enum.map_join(distinct, ", ", fn
-        {field, _direction} -> to_select_column_name(field, @table_alias)
-        field when is_atom(field) -> to_select_column_name(field, @table_alias)
+        {field, _direction} -> Core.to_select_column_name(field, @table_alias)
+        field when is_atom(field) -> Core.to_select_column_name(field, @table_alias)
       end)
 
     # Build aggregate joins for both sort and filter
@@ -458,10 +458,10 @@ defmodule AshXTDB.SQL do
         # Default to ordering by distinct fields
         Enum.map_join(distinct, ", ", fn
           {field, direction} ->
-            "#{to_select_column_name(field, @table_alias)} #{direction_to_sql(direction)}"
+            "#{Core.to_select_column_name(field, @table_alias)} #{direction_to_sql(direction)}"
 
           field ->
-            "#{to_select_column_name(field, @table_alias)} ASC"
+            "#{Core.to_select_column_name(field, @table_alias)} ASC"
         end)
       end
 
@@ -547,11 +547,9 @@ defmodule AshXTDB.SQL do
 
   # Get outer columns for distinct subquery (mapping from sub.*)
   defp get_outer_columns_for_distinct(resource, calc_sql) do
-    attrs = Ash.Resource.Info.attributes(resource)
-
     columns =
-      attrs
-      |> Enum.map(& &1.name)
+      resource
+      |> AshXTDB.DataLayer.Info.attribute_names()
       |> ensure_id_column()
       |> Enum.map_join(", ", fn
         :id -> "sub.\"_id\" AS \"_id\""
@@ -597,7 +595,7 @@ defmodule AshXTDB.SQL do
     columns =
       select
       |> ensure_id_column()
-      |> Enum.map_join(", ", &to_select_column_name(&1, @table_alias))
+      |> Enum.map_join(", ", &Core.to_select_column_name(&1, @table_alias))
 
     calc_sql = build_calculation_selects(query)
 
@@ -648,12 +646,10 @@ defmodule AshXTDB.SQL do
   defp calculation_select_name(%{name: name}), do: "__calc_#{name}"
 
   defp get_all_columns(resource, _table) do
-    attrs = Ash.Resource.Info.attributes(resource)
-
-    attrs
-    |> Enum.map(& &1.name)
+    resource
+    |> AshXTDB.DataLayer.Info.attribute_names()
     |> ensure_id_column()
-    |> Enum.map_join(", ", &to_select_column_name(&1, @table_alias))
+    |> Enum.map_join(", ", &Core.to_select_column_name(&1, @table_alias))
   end
 
   defp build_from(%{table: table, context: context}) do
@@ -693,20 +689,11 @@ defmodule AshXTDB.SQL do
     |> Map.values()
     |> Enum.sort_by(fn join -> String.length(join.alias) end)
     |> Enum.map_join(" ", fn join ->
-      # Handle _id column quoting for join conditions
-      source_col = format_join_column(join.source_alias, join.source_attr)
-      dest_col = format_join_column(join.alias, join.dest_attr)
+      source_col = Core.to_select_column_name(join.source_attr, join.source_alias)
+      dest_col = Core.to_select_column_name(join.dest_attr, join.alias)
       quoted_table = quote_identifier(join.table)
       "LEFT JOIN #{quoted_table} #{join.alias} ON #{source_col} = #{dest_col}"
     end)
-  end
-
-  defp format_join_column(alias, :id), do: "#{alias}.\"_id\""
-  defp format_join_column(alias, :_id), do: "#{alias}.\"_id\""
-
-  defp format_join_column(alias, attr) do
-    quoted_col = quote_identifier(Atom.to_string(attr))
-    "#{alias}.#{quoted_col}"
   end
 
   defp build_order(query, agg_alias_map)
@@ -842,17 +829,7 @@ defmodule AshXTDB.SQL do
   defp aggregate_kind_to_sql(:max, field), do: "MAX(#{field})"
   defp aggregate_kind_to_sql(kind, _field), do: raise("Unsupported aggregate kind: #{kind}")
 
-  # Convert sort direction to SQL
-  # NOTE: XTDB has a quirk where DESC reverses NULLS FIRST/LAST behavior.
-  # To get correct results, we swap NULLS FIRST <-> NULLS LAST for DESC sorts.
-  # See: https://github.com/xtdb/xtdb/issues/... (if there's a bug report)
-  defp direction_to_sql(:asc), do: " ASC"
-  defp direction_to_sql(:desc), do: " DESC"
-  defp direction_to_sql(:asc_nils_first), do: " ASC NULLS FIRST"
-  defp direction_to_sql(:asc_nils_last), do: " ASC NULLS LAST"
-  # XTDB quirk: swap NULLS FIRST/LAST for DESC to get correct behavior
-  defp direction_to_sql(:desc_nils_first), do: " DESC NULLS LAST"
-  defp direction_to_sql(:desc_nils_last), do: " DESC NULLS FIRST"
+  # Sort direction helper delegated to Core.direction_to_sql/1
 
   # Convert a sort field to SQL - handles calculations, aggregates, and regular fields
 
@@ -958,15 +935,8 @@ defmodule AshXTDB.SQL do
     end
   end
 
-  # XTDB uses SQL:2011 FETCH/OFFSET syntax instead of PostgreSQL LIMIT/OFFSET
-  defp build_limit(%{limit: nil}), do: nil
-  defp build_limit(%{limit: limit}), do: "FETCH FIRST #{limit} ROWS ONLY"
-
-  defp build_offset(%{offset: nil}), do: nil
-  defp build_offset(%{offset: 0}), do: nil
-  defp build_offset(%{offset: offset}), do: "OFFSET #{offset} ROWS"
-
-  defp to_select_column_name(field, table), do: Core.to_select_column_name(field, table)
+  defp build_limit(%{limit: limit}), do: Core.build_limit(limit)
+  defp build_offset(%{offset: offset}), do: Core.build_offset(offset)
 
   # ============================================================================
   # Public API - Delegated to Core Module
@@ -1036,4 +1006,10 @@ defmodule AshXTDB.SQL do
 
   @doc false
   defdelegate ensure_id_column(columns), to: Core
+
+  @doc false
+  defdelegate direction_to_sql(direction), to: Core
+
+  @doc false
+  defdelegate build_pkey_where(quoted_table, pkey, resource, param_idx), to: Core
 end

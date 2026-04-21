@@ -52,7 +52,6 @@ defmodule AshXTDB.DataLayer.Errors do
         Ash.Error.Invalid.exception(
           errors: [
             InvalidQuery.exception(
-              query: nil,
               message: "SQL syntax error: #{message}"
             )
           ]
@@ -63,7 +62,6 @@ defmodule AshXTDB.DataLayer.Errors do
         Ash.Error.Invalid.exception(
           errors: [
             InvalidQuery.exception(
-              query: nil,
               message: "Table does not exist: #{message}"
             )
           ]
@@ -74,7 +72,6 @@ defmodule AshXTDB.DataLayer.Errors do
         Ash.Error.Invalid.exception(
           errors: [
             InvalidQuery.exception(
-              query: nil,
               message: "Column does not exist: #{message}"
             )
           ]
@@ -85,7 +82,6 @@ defmodule AshXTDB.DataLayer.Errors do
         Ash.Error.Invalid.exception(
           errors: [
             InvalidQuery.exception(
-              query: nil,
               message: "Data type mismatch: #{message}"
             )
           ]

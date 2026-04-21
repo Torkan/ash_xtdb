@@ -23,6 +23,8 @@ defmodule AshXTDB.Connection do
 
   use DBConnection
 
+  alias AshXTDB.Connection.Protocol
+
   @type t :: %__MODULE__{
           socket: :gen_tcp.socket() | nil,
           buffer: binary(),
@@ -71,11 +73,11 @@ defmodule AshXTDB.Connection do
         else
           {:error, reason} ->
             :gen_tcp.close(socket)
-            {:error, connection_error(reason, opts)}
+            {:error, Protocol.connection_error(reason, opts)}
         end
 
       {:error, reason} ->
-        {:error, connection_error(reason, opts)}
+        {:error, Protocol.connection_error(reason, opts)}
     end
   end
 
@@ -127,7 +129,7 @@ defmodule AshXTDB.Connection do
         {:error, err, state}
 
       {:error, reason, state} ->
-        {:disconnect, connection_error(reason, []), state}
+        {:disconnect, Protocol.connection_error(reason, []), state}
     end
   end
 
@@ -138,7 +140,7 @@ defmodule AshXTDB.Connection do
         {:ok, result, %{state | status: :transaction}}
 
       {:error, reason, state} ->
-        {:disconnect, connection_error(reason, []), state}
+        {:disconnect, Protocol.connection_error(reason, []), state}
     end
   end
 
@@ -153,7 +155,7 @@ defmodule AshXTDB.Connection do
         {:ok, result, %{state | status: :idle}}
 
       {:error, reason, state} ->
-        {:disconnect, connection_error(reason, []), state}
+        {:disconnect, Protocol.connection_error(reason, []), state}
     end
   end
 
@@ -169,7 +171,7 @@ defmodule AshXTDB.Connection do
         {:ok, result, %{state | status: :idle}}
 
       {:error, reason, state} ->
-        {:disconnect, connection_error(reason, []), state}
+        {:disconnect, Protocol.connection_error(reason, []), state}
     end
   end
 
@@ -236,7 +238,7 @@ defmodule AshXTDB.Connection do
         {:error, :md5_password_required}
 
       {:ok, <<?E, _rest::binary>> = msg, _state} ->
-        {:error, parse_error(msg)}
+        {:error, Protocol.parse_error(msg)}
 
       {:error, reason} ->
         {:error, reason}
@@ -263,7 +265,7 @@ defmodule AshXTDB.Connection do
         wait_for_ready(state)
 
       {:ok, <<?E, _rest::binary>> = msg, _state} ->
-        {:error, parse_error(msg)}
+        {:error, Protocol.parse_error(msg)}
 
       {:error, reason} ->
         {:error, reason}
@@ -290,12 +292,12 @@ defmodule AshXTDB.Connection do
     case recv_message(state, timeout) do
       {:ok, <<?T, _::binary>> = msg, state} ->
         # RowDescription
-        {:ok, cols} = parse_row_description(msg)
+        {:ok, cols} = Protocol.parse_row_description(msg)
         recv_query_response(state, cols, rows, timeout)
 
       {:ok, <<?D, _::binary>> = msg, state} ->
         # DataRow
-        {:ok, row} = parse_data_row(msg)
+        {:ok, row} = Protocol.parse_data_row(msg)
         recv_query_response(state, columns, [row | rows], timeout)
 
       {:ok, <<?C, _::binary>>, state} ->
@@ -315,7 +317,7 @@ defmodule AshXTDB.Connection do
         {:ok, result, %{state | status: :error}}
 
       {:ok, <<?E, _rest::binary>> = msg, state} ->
-        error = parse_error(msg)
+        error = Protocol.parse_error(msg)
         drain_until_ready(state, {:error, error}, timeout)
 
       {:ok, <<?N, _rest::binary>>, state} ->
@@ -408,7 +410,7 @@ defmodule AshXTDB.Connection do
   end
 
   # ============================================================================
-  # Message Parsing
+  # Message Framing
   # ============================================================================
 
   defp recv_message(%__MODULE__{socket: socket, buffer: buffer} = state, timeout \\ 10_000) do
@@ -429,134 +431,7 @@ defmodule AshXTDB.Connection do
     end
   end
 
-  defp parse_row_description(<<?T, length::32, rest::binary>>) do
-    payload_length = length - 4
-    <<payload::binary-size(^payload_length), _::binary>> = rest
-    <<num_fields::16, fields_data::binary>> = payload
-
-    {columns, _} =
-      Enum.reduce(1..num_fields//1, {[], fields_data}, fn _, {cols, data} ->
-        {name, rest} = parse_string(data)
-
-        <<_table_oid::32, _col_num::16, type_oid::32, _type_size::16, _type_mod::32, _format::16,
-          remaining::binary>> = rest
-
-        {[{name, type_oid} | cols], remaining}
-      end)
-
-    {:ok, Enum.reverse(columns)}
-  end
-
-  defp parse_data_row(<<?D, length::32, rest::binary>>) do
-    payload_length = length - 4
-    <<payload::binary-size(^payload_length), _::binary>> = rest
-    <<num_fields::16, fields_data::binary>> = payload
-
-    {values, _} =
-      Enum.reduce(1..num_fields//1, {[], fields_data}, fn _, {vals, data} ->
-        <<field_length::32-signed, remaining::binary>> = data
-
-        if field_length == -1 do
-          {[nil | vals], remaining}
-        else
-          <<value::binary-size(^field_length), rest::binary>> = remaining
-          {[value | vals], rest}
-        end
-      end)
-
-    {:ok, Enum.reverse(values)}
-  end
-
-  defp parse_error(<<?E, length::32, rest::binary>>) do
-    payload_length = length - 4
-    <<payload::binary-size(^payload_length), _::binary>> = rest
-    fields = parse_error_fields(payload, %{})
-
-    %Postgrex.Error{
-      postgres: %{
-        code: Map.get(fields, ?C, ""),
-        message: Map.get(fields, ?M, "Unknown error"),
-        severity: Map.get(fields, ?S, "ERROR")
-      }
-    }
-  end
-
-  defp parse_error_fields(<<0, _::binary>>, acc), do: acc
-  defp parse_error_fields(<<>>, acc), do: acc
-
-  defp parse_error_fields(<<type::8, rest::binary>>, acc) do
-    {value, remaining} = parse_string(rest)
-    parse_error_fields(remaining, Map.put(acc, type, value))
-  end
-
-  defp parse_string(data) do
-    case :binary.split(data, <<0>>) do
-      [str, rest] -> {str, rest}
-      [str] -> {str, <<>>}
-    end
-  end
-
-  # ============================================================================
-  # Error Helpers
-  # ============================================================================
-
-  defp connection_error(reason, opts) do
-    message =
-      case reason do
-        :econnrefused ->
-          "connection refused"
-
-        :timeout ->
-          "connection timed out"
-
-        :closed ->
-          "connection closed"
-
-        :nxdomain ->
-          "hostname not found"
-
-        %Postgrex.Error{postgres: %{message: msg, code: code}} ->
-          # Build our own message since Postgrex.Error.message/1 expects pg_code to be an atom
-          "[#{code}] #{msg}"
-
-        %Postgrex.Error{postgres: %{message: msg}} ->
-          msg
-
-        %Postgrex.Error{} = err ->
-          inspect(err)
-
-        other ->
-          inspect(other)
-      end
-
-    if Keyword.get(opts, :show_sensitive_data_on_connection_error, false) do
-      DBConnection.ConnectionError.exception("#{message} (#{inspect(opts)})")
-    else
-      DBConnection.ConnectionError.exception(message)
-    end
-  end
-
   defp ping_error do
     DBConnection.ConnectionError.exception("ping failed")
   end
-
-  # ============================================================================
-  # Test Helpers
-  # ============================================================================
-
-  @doc false
-  # Test helper to expose parse_row_description for unit testing
-  def parse_row_description_for_test(msg), do: parse_row_description(msg)
-
-  @doc false
-  # Test helper to expose parse_data_row for unit testing
-  def parse_data_row_for_test(msg), do: parse_data_row(msg)
-
-  @doc false
-  # Test helper to expose parse_error for unit testing
-  def parse_error_for_test(msg), do: parse_error(msg)
-
-  @doc false
-  # Test helper to expose connection_error for unit testing
-  def connection_error_for_test(reason, opts), do: connection_error(reason, opts)
 end

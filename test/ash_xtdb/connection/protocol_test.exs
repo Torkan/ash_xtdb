@@ -1,16 +1,13 @@
 # SPDX-FileCopyrightText: 2024 Torkild G. Kjevik
 # SPDX-License-Identifier: MIT
 
-defmodule AshXTDB.ConnectionUnitTest do
+defmodule AshXTDB.Connection.ProtocolTest do
   @moduledoc """
-  Unit tests for Connection module message parsing.
-
-  These tests verify the parsing of PostgreSQL wire protocol messages
-  without requiring an actual database connection.
+  Unit tests for PostgreSQL wire protocol message parsing.
   """
   use ExUnit.Case, async: true
 
-  alias AshXTDB.Connection
+  alias AshXTDB.Connection.Protocol
 
   describe "parse_row_description" do
     test "parses single column" do
@@ -28,7 +25,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?T, length::32, payload::binary>>
 
-      assert {:ok, ["id"]} = Connection.parse_row_description_for_test(msg)
+      assert {:ok, [{"id", 23}]} = Protocol.parse_row_description(msg)
     end
 
     test "parses multiple columns" do
@@ -49,7 +46,8 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?T, length::32, payload::binary>>
 
-      assert {:ok, ["id", "name", "email"]} = Connection.parse_row_description_for_test(msg)
+      assert {:ok, [{"id", 23}, {"name", 23}, {"email", 23}]} =
+               Protocol.parse_row_description(msg)
     end
 
     test "parses empty row description (zero columns)" do
@@ -60,7 +58,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?T, length::32, payload::binary>>
 
-      assert {:ok, []} = Connection.parse_row_description_for_test(msg)
+      assert {:ok, []} = Protocol.parse_row_description(msg)
     end
 
     test "parses column names with unicode characters" do
@@ -76,7 +74,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?T, length::32, payload::binary>>
 
-      assert {:ok, ["user_name"]} = Connection.parse_row_description_for_test(msg)
+      assert {:ok, [{"user_name", 25}]} = Protocol.parse_row_description(msg)
     end
 
     test "parses columns with underscores and numbers" do
@@ -95,8 +93,8 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?T, length::32, payload::binary>>
 
-      assert {:ok, ["_id", "col_1", "field_2_value"]} =
-               Connection.parse_row_description_for_test(msg)
+      assert {:ok, [{"_id", 23}, {"col_1", 23}, {"field_2_value", 23}]} =
+               Protocol.parse_row_description(msg)
     end
   end
 
@@ -113,7 +111,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, ["hello"]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, ["hello"]} = Protocol.parse_data_row(msg)
     end
 
     test "parses row with multiple values" do
@@ -131,7 +129,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, ["1", "Alice", "alice@test.com"]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, ["1", "Alice", "alice@test.com"]} = Protocol.parse_data_row(msg)
     end
 
     test "parses row with NULL value (field_length == -1)" do
@@ -148,7 +146,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, ["test", nil, "value"]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, ["test", nil, "value"]} = Protocol.parse_data_row(msg)
     end
 
     test "parses row with all NULL values" do
@@ -161,7 +159,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, [nil, nil, nil]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, [nil, nil, nil]} = Protocol.parse_data_row(msg)
     end
 
     test "parses row with empty string value" do
@@ -174,7 +172,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, [""]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, [""]} = Protocol.parse_data_row(msg)
     end
 
     test "parses row with binary data" do
@@ -188,7 +186,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, [<<1, 2, 3, 4, 5>>]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, [<<1, 2, 3, 4, 5>>]} = Protocol.parse_data_row(msg)
     end
 
     test "parses row with integer as string" do
@@ -202,7 +200,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, ["12345"]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, ["12345"]} = Protocol.parse_data_row(msg)
     end
   end
 
@@ -217,7 +215,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?E, length::32, payload::binary>>
 
-      error = Connection.parse_error_for_test(msg)
+      error = Protocol.parse_error(msg)
 
       assert %Postgrex.Error{postgres: postgres} = error
       assert postgres.code == "42P01"
@@ -234,7 +232,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?E, length::32, payload::binary>>
 
-      error = Connection.parse_error_for_test(msg)
+      error = Protocol.parse_error(msg)
 
       assert %Postgrex.Error{postgres: postgres} = error
       assert postgres.code == ""
@@ -251,7 +249,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?E, length::32, payload::binary>>
 
-      error = Connection.parse_error_for_test(msg)
+      error = Protocol.parse_error(msg)
 
       assert %Postgrex.Error{postgres: postgres} = error
       # Should use defaults
@@ -263,15 +261,15 @@ defmodule AshXTDB.ConnectionUnitTest do
     test "parses error with all standard fields" do
       # Multiple error fields
       error_fields =
-        <<?S, "WARNING", 0, ?C, "01000", 0, ?M, "This is a warning", 0, ?D, "Detail info", 0,
-          ?H, "Hint info", 0, 0>>
+        <<?S, "WARNING", 0, ?C, "01000", 0, ?M, "This is a warning", 0, ?D, "Detail info", 0, ?H,
+          "Hint info", 0, 0>>
 
       payload = error_fields
       length = byte_size(payload) + 4
 
       msg = <<?E, length::32, payload::binary>>
 
-      error = Connection.parse_error_for_test(msg)
+      error = Protocol.parse_error(msg)
 
       assert %Postgrex.Error{postgres: postgres} = error
       assert postgres.code == "01000"
@@ -282,28 +280,28 @@ defmodule AshXTDB.ConnectionUnitTest do
 
   describe "connection_error" do
     test "handles :econnrefused" do
-      error = Connection.connection_error_for_test(:econnrefused, [])
+      error = Protocol.connection_error(:econnrefused, [])
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "connection refused"
     end
 
     test "handles :timeout" do
-      error = Connection.connection_error_for_test(:timeout, [])
+      error = Protocol.connection_error(:timeout, [])
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "connection timed out"
     end
 
     test "handles :closed" do
-      error = Connection.connection_error_for_test(:closed, [])
+      error = Protocol.connection_error(:closed, [])
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "connection closed"
     end
 
     test "handles :nxdomain" do
-      error = Connection.connection_error_for_test(:nxdomain, [])
+      error = Protocol.connection_error(:nxdomain, [])
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "hostname not found"
@@ -317,7 +315,7 @@ defmodule AshXTDB.ConnectionUnitTest do
         }
       }
 
-      error = Connection.connection_error_for_test(postgrex_error, [])
+      error = Protocol.connection_error(postgrex_error, [])
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "[42P01] relation does not exist"
@@ -330,14 +328,14 @@ defmodule AshXTDB.ConnectionUnitTest do
         }
       }
 
-      error = Connection.connection_error_for_test(postgrex_error, [])
+      error = Protocol.connection_error(postgrex_error, [])
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "some error"
     end
 
     test "handles unknown reason with inspect" do
-      error = Connection.connection_error_for_test({:unknown, :error}, [])
+      error = Protocol.connection_error({:unknown, :error}, [])
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "{:unknown, :error}"
@@ -345,7 +343,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
     test "includes opts when show_sensitive_data_on_connection_error is true" do
       opts = [hostname: "localhost", port: 5432, show_sensitive_data_on_connection_error: true]
-      error = Connection.connection_error_for_test(:econnrefused, opts)
+      error = Protocol.connection_error(:econnrefused, opts)
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message =~ "connection refused"
@@ -355,7 +353,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
     test "excludes opts when show_sensitive_data_on_connection_error is false" do
       opts = [hostname: "localhost", port: 5432, show_sensitive_data_on_connection_error: false]
-      error = Connection.connection_error_for_test(:econnrefused, opts)
+      error = Protocol.connection_error(:econnrefused, opts)
 
       assert %DBConnection.ConnectionError{message: message} = error
       assert message == "connection refused"
@@ -377,7 +375,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?T, length::32, payload::binary>>
 
-      assert {:ok, [^name]} = Connection.parse_row_description_for_test(msg)
+      assert {:ok, [{^name, 25}]} = Protocol.parse_row_description(msg)
     end
 
     test "parse_data_row handles large value" do
@@ -391,7 +389,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, [^value]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, [^value]} = Protocol.parse_data_row(msg)
     end
 
     test "parse_data_row handles mixed NULL and non-NULL values" do
@@ -409,7 +407,7 @@ defmodule AshXTDB.ConnectionUnitTest do
 
       msg = <<?D, length::32, payload::binary>>
 
-      assert {:ok, ["a", nil, "b", nil, "c"]} = Connection.parse_data_row_for_test(msg)
+      assert {:ok, ["a", nil, "b", nil, "c"]} = Protocol.parse_data_row(msg)
     end
   end
 end

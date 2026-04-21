@@ -34,7 +34,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [%Ash.Query.Ref{attribute: :name, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "STRING_TO_ARRAY(t.\"name\", ' ')"
     end
@@ -46,7 +46,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: ["hello world"]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "STRING_TO_ARRAY($1, ' ')"
       assert state.params == ["hello world"]
@@ -61,7 +61,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [%Ash.Query.Ref{attribute: :name, relationship_path: []}, ","]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "STRING_TO_ARRAY(t.\"name\", $1)"
       assert state.params == [","]
@@ -74,7 +74,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: ["a,b,c", ","]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "STRING_TO_ARRAY($1, $2)"
       assert state.params == [",", "a,b,c"]
@@ -89,7 +89,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: []
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "NULL"
     end
@@ -103,7 +103,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [%Ash.Query.Ref{attribute: :created_at, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "DATE_TRUNC(DAY, t.\"created_at\")"
     end
@@ -120,7 +120,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "DATE_TRUNC(DAY, t.\"created_at\", $1)"
       assert state.params == ["America/New_York"]
@@ -136,7 +136,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "DATE_TRUNC(DAY, t.\"created_at\", $1)"
       assert state.params == ["Europe/London"]
@@ -152,7 +152,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         right: []
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       # Empty IN clause - no placeholders
       assert sql == "t.\"name\" IN ()"
@@ -169,7 +169,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         right: MapSet.new()
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       # Empty IN clause from MapSet
       assert sql == "t.\"name\" IN ()"
@@ -186,7 +186,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         right: %Ash.Query.Ref{attribute: :tags, relationship_path: []}
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "$1 = ANY(t.\"tags\")"
       assert state.params == ["test_value"]
@@ -202,7 +202,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         right: MapSet.new(["Alice", "Bob"])
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       # MapSet order is undefined, so we check structure
       assert sql =~ "t.\"name\" IN ("
@@ -225,7 +225,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "t.\"created_at\""
       assert sql =~ "INTERVAL"
@@ -244,7 +244,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "t.\"created_at\""
       assert sql =~ "INTERVAL"
@@ -264,7 +264,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "INTERVAL '0' SECOND"
     end
@@ -280,7 +280,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "INTERVAL '7 DAY'"
     end
@@ -296,7 +296,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       # 2 weeks = 14 days
       assert sql =~ "INTERVAL '14 DAY'"
@@ -310,7 +310,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
       # Create a struct that is not handled
       expr = %{__struct__: SomeUnknownModule, data: "test"}
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == nil
     end
@@ -322,7 +322,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
 
       expr = %{not_a_struct: true}
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == nil
     end
@@ -332,7 +332,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
 
       expr = {:unknown, :expression}
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == nil
     end
@@ -350,7 +350,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "t.\"created_at\""
       assert sql =~ "+ $1 * INTERVAL '1' DAY"
@@ -368,7 +368,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "INTERVAL '1' HOUR"
       assert state.params == [24]
@@ -387,7 +387,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "UPPER(t.\"name\")"
     end
@@ -403,7 +403,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "COALESCE(t.\"name\", 'default')"
     end
@@ -420,7 +420,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(t.\"metadata\").user.name"
     end
@@ -435,7 +435,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(t.\"items\")[0].name"
     end
@@ -450,7 +450,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"metadata\""
     end
@@ -469,7 +469,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         }
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"name\" = $1"
       assert state.params == ["Alice"]
@@ -487,7 +487,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         right: %{__struct__: SomeUnknownModule}
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"name\" = $1"
       assert state.params == ["Alice"]
@@ -505,7 +505,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         }
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"name\" = $1"
       assert state.params == ["Bob"]
@@ -523,7 +523,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         right: %{__struct__: SomeUnknownModule}
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"name\" = $1"
       assert state.params == ["Bob"]
@@ -541,7 +541,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         }
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "NOT (t.\"active\" = TRUE)"
     end
@@ -553,7 +553,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         expression: %{__struct__: SomeUnknownModule}
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == nil
     end
@@ -568,7 +568,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :age, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "FLOOR(t.\"age\")"
     end
@@ -581,7 +581,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :age, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "CEIL(t.\"age\")"
     end
@@ -594,7 +594,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :age, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "ABS(t.\"age\")"
     end
@@ -606,7 +606,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [%Ash.Query.Ref{attribute: :age, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "ROUND(t.\"age\")"
     end
@@ -618,7 +618,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [%Ash.Query.Ref{attribute: :age, relationship_path: []}, 2]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "ROUND(t.\"age\", $1)"
       assert state.params == [2]
@@ -633,7 +633,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: []
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "CURRENT_TIMESTAMP"
     end
@@ -645,7 +645,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: []
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "CURRENT_DATE"
     end
@@ -657,7 +657,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [5, :day]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(CURRENT_TIMESTAMP - ($1 * INTERVAL '1' DAY))"
       assert state.params == [5]
@@ -670,7 +670,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [3, :hour]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(CURRENT_TIMESTAMP + ($1 * INTERVAL '1' HOUR))"
       assert state.params == [3]
@@ -688,7 +688,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~
                "(CASE WHEN POSITION($1 IN t.\"name\") = 0 THEN NULL ELSE POSITION($1 IN t.\"name\") - 1 END)"
@@ -710,7 +710,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"name\" || $1"
       assert state.params == ["suffix"]
@@ -730,7 +730,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "t.\"name\""
       assert sql =~ " || $"
@@ -758,7 +758,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "CASE"
       assert sql =~ "WHEN t.\"age\" < $1 THEN $2"
@@ -784,7 +784,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "CASE WHEN t.\"age\" > $1 THEN $2 ELSE $3 END"
       assert state.params == ["minor", "adult", 18]
@@ -802,7 +802,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\""
     end
@@ -817,7 +817,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         right: "_suffix"
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(t.\"name\" || $1)"
       assert state.params == ["_suffix"]
@@ -833,7 +833,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :name, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"name\" IS NULL"
     end
@@ -851,7 +851,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "NOT (t.\"active\" = TRUE)"
     end
@@ -867,7 +867,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(t.\"age\" + $1)"
       assert state.params == [5]
@@ -884,7 +884,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(t.\"name\" || $1)"
       assert state.params == [" Jr."]
@@ -898,7 +898,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: ["arg1", "arg2"]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == nil
     end
@@ -912,7 +912,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [500, :millisecond]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "MILLISECOND"
       assert state.params == [500]
@@ -925,7 +925,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [1000, :microsecond]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "MICROSECOND"
       assert state.params == [1000]
@@ -938,7 +938,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         arguments: [2, "day"]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "DAY"
       assert state.params == [2]
@@ -957,7 +957,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "MOD(t.\"age\", $1)"
       assert state.params == [10]
@@ -976,7 +976,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\" = $1"
       assert state.params == [25]
@@ -993,7 +993,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\" != $1"
       assert state.params == [25]
@@ -1010,7 +1010,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\" > $1"
       assert state.params == [18]
@@ -1027,7 +1027,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\" < $1"
       assert state.params == [18]
@@ -1044,7 +1044,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\" >= $1"
       assert state.params == [18]
@@ -1061,7 +1061,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\" <= $1"
       assert state.params == [18]
@@ -1077,7 +1077,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: []
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "CURRENT_TIMESTAMP"
     end
@@ -1090,7 +1090,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: []
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "CURRENT_DATE"
     end
@@ -1103,7 +1103,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [7, :day]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(CURRENT_TIMESTAMP - ($1 * INTERVAL '1' DAY))"
       assert state.params == [7]
@@ -1117,7 +1117,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [1, :week]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(CURRENT_TIMESTAMP + ($1 * INTERVAL '1' WEEK))"
       assert state.params == [1]
@@ -1135,7 +1135,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~ "t.\"created_at\""
       assert sql =~ "INTERVAL '1' MINUTE"
@@ -1150,7 +1150,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :created_at, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "DATE_TRUNC(DAY, t.\"created_at\")"
     end
@@ -1168,7 +1168,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "(t.\"data\").nested.value"
     end
@@ -1186,7 +1186,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "t.\"age\""
     end
@@ -1201,7 +1201,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :name, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "LOWER(t.\"name\")"
     end
@@ -1214,7 +1214,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :name, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "LENGTH(t.\"name\")"
     end
@@ -1227,7 +1227,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :name, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "TRIM(t.\"name\")"
     end
@@ -1243,7 +1243,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         ]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql =~
                "(CASE WHEN POSITION($1 IN t.\"name\") = 0 THEN NULL ELSE POSITION($1 IN t.\"name\") - 1 END)"
@@ -1261,7 +1261,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :age, relationship_path: []}]
       }
 
-      {sql, _state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, _state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "ROUND(t.\"age\")"
     end
@@ -1274,7 +1274,7 @@ defmodule AshXTDB.SQL.FilterUnitTest do
         args: [%Ash.Query.Ref{attribute: :age, relationship_path: []}, 2]
       }
 
-      {sql, state} = Filter.expression_to_sql_for_test(expr, state)
+      {sql, state} = Filter.expression_to_sql(expr, state)
 
       assert sql == "ROUND(t.\"age\", $1)"
       assert state.params == [2]

@@ -39,6 +39,18 @@ defmodule AshXTDB.Test.User do
     attribute :organization_id, :uuid do
       public? true
     end
+
+    attribute :tags, {:array, :string} do
+      public? true
+    end
+
+    attribute :roles, {:array, :atom} do
+      public? true
+    end
+
+    attribute :scores, {:array, :integer} do
+      public? true
+    end
   end
 
   relationships do

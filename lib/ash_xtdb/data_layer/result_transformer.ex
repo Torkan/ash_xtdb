@@ -368,7 +368,12 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
   # Private Helpers
   # ============================================================================
 
-  defp init_constraints(type, constraints) do
+  # Composite types like {:array, inner} don't expose init/1 themselves —
+  # only the inner type does. Pass constraints through; Ash applies them
+  # per-item during cast_input/cast_stored.
+  defp init_constraints({:array, _inner}, constraints), do: constraints
+
+  defp init_constraints(type, constraints) when is_atom(type) do
     if function_exported?(type, :init, 1) do
       case type.init(constraints) do
         {:ok, initialized} -> initialized
@@ -378,4 +383,6 @@ defmodule AshXTDB.DataLayer.ResultTransformer do
       constraints
     end
   end
+
+  defp init_constraints(_type, constraints), do: constraints
 end

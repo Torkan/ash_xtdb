@@ -355,6 +355,26 @@ defmodule AshXTDB.Connection do
     }
   end
 
+  # Standard PostgreSQL array OID -> element OID mapping. Used for arrays
+  # that XTDB returns in Postgres text format. (Some array types arrive as
+  # JSON via OID 114 instead and are handled by parse_json/1.)
+  @array_element_oid %{
+    1000 => 16,
+    1005 => 21,
+    1007 => 23,
+    1016 => 20,
+    1009 => 25,
+    1014 => 1042,
+    1015 => 1043,
+    1021 => 700,
+    1022 => 701,
+    1115 => 1114,
+    1182 => 1082,
+    1185 => 1184,
+    2951 => 2950,
+    1231 => 1700
+  }
+
   # Cast text-format values from the simple query protocol using type OIDs
   # from the RowDescription message. XTDB sends real PostgreSQL type OIDs,
   # so we can parse values at the connection level, delivering already-typed
@@ -368,6 +388,21 @@ defmodule AshXTDB.Connection do
   defp cast_by_oid(val, 1184), do: parse_timestamptz(val)
   defp cast_by_oid(val, 114), do: parse_json(val)
   defp cast_by_oid(val, 25), do: AshXTDB.UTF8Workaround.decode(val)
+
+  # Postgres array text format (e.g. {1,2,3} or {"a","b"}). Element values
+  # are decoded recursively via the element OID; unknown element OIDs fall
+  # through to the catch-all and remain as strings.
+  defp cast_by_oid(val, oid) when is_map_key(@array_element_oid, oid) do
+    element_oid = Map.fetch!(@array_element_oid, oid)
+
+    val
+    |> AshXTDB.Connection.ArrayDecoder.parse()
+    |> Enum.map(fn
+      nil -> nil
+      elem -> cast_by_oid(elem, element_oid)
+    end)
+  end
+
   defp cast_by_oid(val, _oid), do: val
 
   defp parse_float(val) do

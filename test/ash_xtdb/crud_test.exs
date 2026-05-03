@@ -265,4 +265,58 @@ defmodule AshXTDB.CrudTest do
       assert ages == [23, 24]
     end
   end
+
+  describe "array attributes" do
+    test "round-trips a string array" do
+      created =
+        User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "strings@example.com",
+          tags: ["alpha", "beta", "gamma"]
+        })
+        |> Ash.create!()
+
+      [found] = User |> Ash.Query.filter(id == ^created.id) |> Ash.read!()
+      assert found.tags == ["alpha", "beta", "gamma"]
+    end
+
+    test "round-trips an atom array" do
+      created =
+        User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "atoms@example.com",
+          roles: [:admin, :editor]
+        })
+        |> Ash.create!()
+
+      [found] = User |> Ash.Query.filter(id == ^created.id) |> Ash.read!()
+      assert found.roles == [:admin, :editor]
+    end
+
+    test "round-trips an integer array" do
+      created =
+        User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "ints@example.com",
+          scores: [10, 20, 30]
+        })
+        |> Ash.create!()
+
+      [found] = User |> Ash.Query.filter(id == ^created.id) |> Ash.read!()
+      assert found.scores == [10, 20, 30]
+    end
+
+    test "round-trips a string with embedded comma (array text-format escaping)" do
+      created =
+        User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "comma@example.com",
+          tags: ["with,comma", ~s(with"quote), "plain"]
+        })
+        |> Ash.create!()
+
+      [found] = User |> Ash.Query.filter(id == ^created.id) |> Ash.read!()
+      assert found.tags == ["with,comma", ~s(with"quote), "plain"]
+    end
+  end
 end
